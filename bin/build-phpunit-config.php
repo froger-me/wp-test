@@ -44,16 +44,32 @@ foreach (array_merge($manifest->plugins(), $manifest->themes()) as $extension) {
 	}
 }
 
-$groups = '';
+$excludedGroups = [];
 
 if (getenv('WP_TEST_INCLUDE_DESTRUCTIVE') !== '1') {
-	$groups = <<<'XML'
-	<groups>
-		<exclude>
-			<group>destructive</group>
-		</exclude>
-	</groups>
-XML;
+	$excludedGroups[] = 'destructive';
+}
+
+if ($manifest->profile() !== 'harness') {
+	$excludedGroups[] = 'harness-fixture';
+}
+
+$groups = '';
+
+if ($excludedGroups !== []) {
+	$groupEntries = implode(
+		"\n",
+		array_map(
+			static fn (string $group): string =>
+				"\t\t\t<group>" . $escape($group) . '</group>',
+			$excludedGroups
+		)
+	);
+
+	$groups = sprintf(
+		"\t<groups>\n\t\t<exclude>\n%s\n\t\t</exclude>\n\t</groups>",
+		$groupEntries
+	);
 }
 
 $coverage = '';
