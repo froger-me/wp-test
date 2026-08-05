@@ -11,7 +11,7 @@ The goal is a lightweight, deterministic local test surface for plugin and theme
 1. PHPUnit uses only database `wp_tests` with prefix `wptests_`. Never run destructive tests against working database `db`.
 2. External services are blocked by default. Add explicit mocks or separately named opt-in integration commands; never weaken the default block to make a test pass.
 3. Routine commands must not start, stop, restart, rebuild, or reconfigure DDEV. Environment lifecycle remains explicit.
-4. Public developer entry points belong in the consuming WordPress root's `composer.json`.
+4. Every public Composer command must be available with the same name and behavior from both the consuming WordPress root and the `.test-tools` directory.
 5. Developers must not need to enter `ddev sh` for normal work. Host wrappers may use `ddev wp` or `ddev exec`, but not lifecycle or configuration commands.
 6. Never add site-specific domains, absolute user paths, SSH aliases, secrets, passwords, API keys, buckets, or service credentials.
 7. Never silently alter the consuming site's persistent database, active plugin set, theme, uploads, or source files.
@@ -48,7 +48,7 @@ Add one documented configuration entry point when a path needs to become configu
 
 ## Public command contract
 
-Current public commands are exposed from the consuming WordPress root:
+Current public commands are exposed from both the consuming WordPress root and `.test-tools`:
 
 ```text
 composer doctor
@@ -62,9 +62,13 @@ composer test:coverage
 composer test:junit
 ```
 
+The toolkit's `composer.json` owns the `.test-tools` command mappings. The consuming root `composer.json` mirrors the same command names for convenience. The shell wrappers are the behavioral source of truth.
+
 Rules:
 
-- preserve native PHPUnit argument passthrough;
+- host wrappers must resolve the WordPress root from their own location and must not depend on the caller's current working directory;
+- preserve native PHPUnit argument passthrough from both Composer locations;
+- keep command names, profiles, exit codes, and side effects identical in both locations;
 - invalid profiles and slugs fail before PHPUnit starts;
 - commands never manage DDEV lifecycle;
 - `composer doctor` is read-only;
@@ -225,7 +229,7 @@ Update `.gitignore` in the same change whenever a tool adds generated downloads,
 
 Documentation is part of implementation. Update `README.md` and/or `SETUP.md` in the same commit whenever any of these changes:
 
-- public command;
+- public command or invocation location;
 - setup or upgrade step;
 - required DDEV package or service;
 - database, host, prefix, environment variable, or configuration file;
@@ -259,6 +263,8 @@ python3 -m json.tool .test-tools/composer.json >/dev/null
 composer doctor
 composer test:harness
 composer test
+(cd .test-tools && composer doctor)
+(cd .test-tools && composer test:harness)
 ```
 
 Run specialist commands when changed:
