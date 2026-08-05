@@ -2,11 +2,12 @@
 
 ## Current state
 
-Phase 1, the shared PHPUnit surface, is implemented.
+Phases 1 and 2 are implemented.
 
 The toolkit now provides:
 
 - read-only `composer doctor`;
+- standard local logging commands (`composer tail:log` and `composer clear:log`);
 - a shared preflight for every PHPUnit entry point;
 - fixed database safety requirements (`db`, `wp_tests`, `db`, `wptests_`);
 - WordPress/PHP/PHPUnit compatibility checks;
@@ -28,6 +29,8 @@ Public commands:
 
 ```text
 composer doctor
+composer tail:log
+composer clear:log
 composer test
 composer test:harness
 composer test:plugin -- <slug>
@@ -38,48 +41,27 @@ composer test:coverage
 composer test:junit
 ```
 
-Before beginning another phase, Phase 1 should be exercised in the consuming WordPress installation with its actual active extension set. Any defects found there remain Phase 1 stabilization work.
+Before beginning another phase, the implemented surfaces should be exercised in the consuming WordPress installation with its actual active extension set. Any defects found there remain stabilization work for the relevant phase.
 
 ---
 
-## Phase 2 — Add standard logging commands
+## Phase 2 — Standard logging commands (complete)
 
-### 1. Add `composer tail:log`
+Implemented:
 
-Create a host wrapper that follows the local WordPress debug log inside DDEV:
+- `composer tail:log` validates the local DDEV WordPress logging configuration, creates `wp-content/debug.log` when possible, and follows it with `tail -F`;
+- `composer clear:log` performs the same checks before truncating the local file without deleting it;
+- both commands work from the WordPress root and `.test-tools`;
+- both commands require DDEV to already be running and never manage its lifecycle;
+- disabled logging, custom log destinations, and unwritable paths fail with actionable messages; and
+- required `wp-config.php` settings and troubleshooting are documented.
 
-```text
-composer tail:log
-```
-
-Requirements:
-
-- DDEV must already be running;
-- ensure `wp-content/debug.log` exists without changing remote configuration;
-- use `tail -F` so log rotation or recreation is handled;
-- propagate Ctrl+C cleanly;
-- do not start, restart, or rebuild containers;
-- fail clearly when local logging is not configured; and
-- document required `wp-config.php` settings.
-
-Acceptance criteria:
-
-- the command immediately follows `wp-content/debug.log`;
-- stopping it does not stop DDEV;
-- a missing or unwritable log produces an actionable error;
-- no remote path or credential is embedded.
-
-### 2. Add only useful companion commands
-
-Evaluate:
+`composer logs:web` and `composer logs:db` were not added. The direct DDEV commands already provide the intended behavior without a toolkit-specific safety or convenience improvement:
 
 ```text
-composer clear:log
-composer logs:web
-composer logs:db
+ddev logs -f
+ddev logs -s db -f
 ```
-
-Add a command only when it materially improves on the direct DDEV command. Do not build a broad wrapper layer around DDEV.
 
 ---
 
@@ -249,8 +231,7 @@ This remains a final smoke-test layer, not the primary workflow.
 
 ## Recommended next order
 
-1. Stabilize Phase 1 against the consuming site's real active extensions.
-2. Add `composer tail:log`.
-3. Add Playwright with database and filesystem restoration.
-4. Add plugin/theme E2E discovery and failure artifacts.
-5. Add optional database-refresh and local-service helpers only when justified.
+1. Stabilize Phases 1 and 2 against the consuming site's real active extensions and local logging configuration.
+2. Add Playwright with database and filesystem restoration.
+3. Add plugin/theme E2E discovery and failure artifacts.
+4. Add optional database-refresh and local-service helpers only when justified.
