@@ -3,6 +3,9 @@
 set -euo pipefail
 
 TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$TOOLKIT_DIR")"
+
+cd "$PROJECT_ROOT"
 
 if ! command -v ddev >/dev/null 2>&1; then
 	echo "ERROR: DDEV is not available on the host PATH." >&2
