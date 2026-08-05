@@ -54,9 +54,7 @@ final class IntegrationHelpersTest extends IntegrationTestCase
 			$this->activatePlugin(self::PLUGIN);
 		}
 
-		if (function_exists('wp_test_fixture_register_rest_route')) {
-			wp_test_fixture_register_rest_route();
-		}
+		do_action('rest_api_init');
 
 		wp_set_current_user(0);
 
