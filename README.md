@@ -83,6 +83,8 @@ composer test -- --order-by=random --random-order-seed=12345
 
 The working `db` database and working upload directory are not used by PHPUnit.
 
+The toolkit's non-fixture safety checks remain part of normal profiles. Fixture lifecycle, REST, upload, mail, and helper self-tests use PHPUnit group `harness-fixture` and run only through `composer test:harness`; default, focused, multisite, coverage, JUnit, and destructive profiles exclude that group so toolkit fixtures cannot affect the selected real plugin/theme combination.
+
 ## Extension test conventions
 
 Active plugins are included by default. The active theme and its parent theme are included by default.
