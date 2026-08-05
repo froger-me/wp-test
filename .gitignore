@@ -1,5 +1,11 @@
+.DS_Store
+.phpunit.result.cache
 .wordpress-test-version
-vendor
-wordpress
-wordpress-tests-lib
 active-plugins.json
+coverage/
+node_modules/
+playwright-report/
+test-results/
+vendor/
+wordpress/
+wordpress-tests-lib/
