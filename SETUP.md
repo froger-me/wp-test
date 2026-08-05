@@ -91,6 +91,8 @@ defined('WP_DEBUG_LOG') || define('WP_DEBUG_LOG', $is_ddev);
 defined('WP_DEBUG_DISPLAY') || define('WP_DEBUG_DISPLAY', false);
 ```
 
+`composer tail:log` and `composer clear:log` require `WP_DEBUG` to be `true` in DDEV and `WP_DEBUG_LOG` to be either `true` or the exact local `wp-content/debug.log` path. They do not edit these settings automatically.
+
 Make server-specific PHP error logging conditional:
 
 ```php
@@ -158,7 +160,7 @@ Do not ignore `.test-tools` when intentionally using it as a Git submodule. `.dd
 ddev start
 ```
 
-Routine test commands require DDEV to be running and never start it implicitly.
+Routine test and logging commands require DDEV to be running and never start it implicitly.
 
 ## 6. Populate the working database
 
@@ -253,7 +255,7 @@ ddev restart
 ddev exec svn --version --quiet
 ```
 
-This is a one-time DDEV image configuration. Routine tests do not rebuild the image.
+This is a one-time DDEV image configuration. Routine commands do not rebuild the image.
 
 ## 9. Install `.test-tools`
 
@@ -264,7 +266,7 @@ ddev exec --dir=/var/www/html/.test-tools composer install
 
 The cloned `.test-tools/composer.json` already exposes every toolkit command. No root Composer configuration is required when commands will only be run from inside `.test-tools`.
 
-Ensure the shell entry points remain executable:
+Ensure the executable shell entry points remain executable:
 
 ```bash
 chmod +x \
@@ -273,7 +275,7 @@ chmod +x \
   .test-tools/sync-wordpress-tests.sh
 ```
 
-`doctor-host.sh` is invoked through `bash` and does not require an executable bit.
+`doctor-host.sh` and `log-host.sh` are invoked through `bash` and do not require executable bits.
 
 ## 10. Mirror the commands at the WordPress root
 
@@ -289,6 +291,8 @@ To use the same commands without changing into `.test-tools`, create or merge th
     },
     "scripts": {
         "doctor": "bash .test-tools/doctor-host.sh",
+        "tail:log": "bash .test-tools/log-host.sh tail",
+        "clear:log": "bash .test-tools/log-host.sh clear",
         "test": "bash .test-tools/run-tests-host.sh",
         "test:harness": "bash .test-tools/run-tests-host.sh --profile=harness",
         "test:plugin": "bash .test-tools/run-tests-host.sh --profile=plugin",
@@ -471,9 +475,42 @@ HttpMock::queue(
 
 Unmocked requests fail with `unexpected_http_request`.
 
-## 16. Reporting
+## 16. Logging and reporting
 
-JUnit:
+### WordPress debug log
+
+Follow the local WordPress debug log from either supported directory:
+
+```bash
+composer tail:log
+```
+
+The command:
+
+- verifies DDEV is already running;
+- loads WordPress with plugins and themes skipped;
+- validates `WP_DEBUG` and the standard `WP_DEBUG_LOG` destination;
+- creates `wp-content/debug.log` when it is missing and the directory is writable; and
+- follows it with `tail -F`, including across file rotation or recreation.
+
+Press `Ctrl+C` to stop following the file. DDEV remains running.
+
+Clear the local file without deleting it:
+
+```bash
+composer clear:log
+```
+
+The clear command performs the same configuration and writability checks before truncating the file.
+
+For DDEV service logs, use the direct commands because the toolkit adds no safety or convenience beyond DDEV itself:
+
+```bash
+ddev logs -f
+ddev logs -s db -f
+```
+
+### JUnit
 
 ```bash
 composer test:junit
@@ -485,7 +522,7 @@ Output:
 .test-tools/runtime/junit.xml
 ```
 
-Coverage:
+### Coverage
 
 ```bash
 ddev xdebug on
@@ -516,6 +553,8 @@ The toolkit ignores:
 ```
 
 `runtime/` contains the generated manifest, PHPUnit configuration, working-site selection snapshots, isolated upload directory, and linked extension overlay. It is rebuilt for each run.
+
+`wp-content/debug.log` belongs to the consuming WordPress installation. The logging commands may create or truncate that local file but never add it to the toolkit repository.
 
 ## 18. WordPress and toolkit updates
 
@@ -551,11 +590,21 @@ composer test
 
 ### DDEV is stopped
 
-`composer doctor` and all test commands fail from both supported directories. Start DDEV explicitly from the WordPress root:
+`composer doctor`, logging commands, and all test commands fail from both supported directories. Start DDEV explicitly from the WordPress root:
 
 ```bash
 ddev start
 ```
+
+### WordPress logging is not configured
+
+Use the local settings from Step 3. `composer tail:log` and `composer clear:log` reject `WP_DEBUG` values other than `true`, disabled `WP_DEBUG_LOG`, and custom log destinations because the public commands intentionally operate only on `wp-content/debug.log`.
+
+The commands never modify `wp-config.php`. Correct the configuration, then rerun the command.
+
+### The debug log is missing or unwritable
+
+A missing file is created automatically only when `wp-content` is writable. Correct ownership or permissions when the command reports that the directory or file cannot be written. Do not point the command at a remote log.
 
 ### Composer cannot detect the root package version
 
