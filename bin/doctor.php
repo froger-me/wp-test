@@ -7,12 +7,9 @@ $projectRoot = dirname($toolkitRoot);
 $config      = require $toolkitRoot . '/config.php';
 $quiet       = in_array('--quiet', $argv, true);
 
-$errors = [];
+$errors   = [];
 $warnings = [];
 
-/**
- * @param bool $condition
- */
 $check = static function (
 	bool $condition,
 	string $success,
@@ -87,28 +84,69 @@ $check(
 	'The working and PHPUnit database names must never be equal.'
 );
 
-$environmentDatabase = getenv('DB_NAME');
-$environmentHost     = getenv('DB_HOST');
+$ddevConfigFile = $projectRoot . '/wp-config-ddev.php';
+$ddevConfigLoaded = false;
 
 $check(
-	$environmentDatabase === $workingDatabase,
-	'DDEV exposes the expected working database.',
-	sprintf(
-		'DDEV DB_NAME mismatch: expected %s, got %s.',
-		$workingDatabase,
-		$environmentDatabase === false ? '(unset)' : $environmentDatabase
-	)
+	is_file($ddevConfigFile),
+	'DDEV WordPress database configuration exists.',
+	sprintf('DDEV WordPress database configuration is missing: %s', $ddevConfigFile)
 );
 
-$check(
-	$environmentHost === $databaseHost,
-	'DDEV exposes the expected database host.',
-	sprintf(
-		'DDEV DB_HOST mismatch: expected %s, got %s.',
-		$databaseHost,
-		$environmentHost === false ? '(unset)' : $environmentHost
-	)
-);
+if (is_file($ddevConfigFile)) {
+	defined('ABSPATH') || define('ABSPATH', $projectRoot . '/');
+
+	try {
+		require $ddevConfigFile;
+		$ddevConfigLoaded = true;
+	} catch (Throwable $exception) {
+		$check(
+			false,
+			'DDEV WordPress database configuration loaded.',
+			sprintf(
+				'Could not load %s: %s',
+				$ddevConfigFile,
+				$exception->getMessage()
+			)
+		);
+	}
+}
+
+if ($ddevConfigLoaded) {
+	foreach (['DB_NAME', 'DB_HOST', 'DB_USER', 'DB_PASSWORD'] as $constant) {
+		$check(
+			defined($constant),
+			sprintf('DDEV defines %s.', $constant),
+			sprintf('%s was not defined by %s.', $constant, $ddevConfigFile)
+		);
+	}
+
+	if (defined('DB_NAME')) {
+		$actualDatabase = (string) constant('DB_NAME');
+		$check(
+			$actualDatabase === $workingDatabase,
+			'DDEV WordPress uses working database db.',
+			sprintf(
+				'DDEV DB_NAME mismatch: expected %s, got %s.',
+				$workingDatabase,
+				$actualDatabase
+			)
+		);
+	}
+
+	if (defined('DB_HOST')) {
+		$actualHost = (string) constant('DB_HOST');
+		$check(
+			$actualHost === $databaseHost,
+			'DDEV WordPress uses database host db.',
+			sprintf(
+				'DDEV DB_HOST mismatch: expected %s, got %s.',
+				$databaseHost,
+				$actualHost
+			)
+		);
+	}
+}
 
 $minimumPhp = (int) ($config['minimum_php_version'] ?? 0);
 
@@ -156,7 +194,7 @@ $check(
 	'Composer dependencies are missing; run Composer install in .test-tools.'
 );
 
-$phpunitBinary = $toolkitRoot . '/vendor/bin/phpunit';
+$phpunitBinary  = $toolkitRoot . '/vendor/bin/phpunit';
 $phpunitVersion = null;
 
 if (is_file($phpunitBinary)) {
@@ -245,41 +283,58 @@ if (is_string($wpVersion) && $wpVersion !== '') {
 
 $mysqli = null;
 
-if (extension_loaded('mysqli')) {
+if (
+	extension_loaded('mysqli') &&
+	defined('DB_HOST') &&
+	defined('DB_USER') &&
+	defined('DB_PASSWORD')
+) {
 	mysqli_report(MYSQLI_REPORT_OFF);
 	$mysqli = @new mysqli(
-		$databaseHost,
-		getenv('DB_USER') ?: 'db',
-		getenv('DB_PASSWORD') ?: 'db'
+		(string) constant('DB_HOST'),
+		(string) constant('DB_USER'),
+		(string) constant('DB_PASSWORD')
 	);
 }
 
 $check(
 	$mysqli instanceof mysqli && $mysqli->connect_errno === 0,
 	'DDEV database service is reachable.',
-	'Could not connect to the DDEV database service using the project credentials.'
+	'Could not connect to the DDEV database service using wp-config-ddev.php credentials.'
 );
 
 if ($mysqli instanceof mysqli && $mysqli->connect_errno === 0) {
-	$statement = $mysqli->prepare(
-		'SELECT SCHEMA_NAME
-		FROM information_schema.SCHEMATA
-		WHERE SCHEMA_NAME = ?'
-	);
+	$databaseExists = static function (mysqli $connection, string $database): bool {
+		$statement = $connection->prepare(
+			'SELECT SCHEMA_NAME
+			FROM information_schema.SCHEMATA
+			WHERE SCHEMA_NAME = ?'
+		);
 
-	if ($statement !== false) {
-		$statement->bind_param('s', $testDatabase);
+		if ($statement === false) {
+			return false;
+		}
+
+		$statement->bind_param('s', $database);
 		$statement->execute();
 		$result = $statement->get_result();
 		$exists = $result !== false && $result->fetch_row() !== null;
 		$statement->close();
 
-		$check(
-			$exists,
-			'PHPUnit database wp_tests exists.',
-			'PHPUnit database wp_tests does not exist; create it before running tests.'
-		);
-	}
+		return $exists;
+	};
+
+	$check(
+		$databaseExists($mysqli, $workingDatabase),
+		'Working database db exists.',
+		'Working database db does not exist.'
+	);
+
+	$check(
+		$databaseExists($mysqli, $testDatabase),
+		'PHPUnit database wp_tests exists.',
+		'PHPUnit database wp_tests does not exist; create it before running tests.'
+	);
 
 	$mysqli->close();
 }
