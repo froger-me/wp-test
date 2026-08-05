@@ -11,6 +11,8 @@
     },
     "scripts": {
         "doctor": "bash doctor-host.sh",
+        "tail:log": "bash log-host.sh tail",
+        "clear:log": "bash log-host.sh clear",
         "test": "bash run-tests-host.sh",
         "test:harness": "bash run-tests-host.sh --profile=harness",
         "test:plugin": "bash run-tests-host.sh --profile=plugin",
@@ -22,6 +24,8 @@
     },
     "scripts-descriptions": {
         "doctor": "Run the read-only DDEV and PHPUnit safety preflight.",
+        "tail:log": "Follow the local WordPress debug log inside the running DDEV project.",
+        "clear:log": "Safely truncate the local WordPress debug log.",
         "test": "Run the default WordPress integration profile.",
         "test:harness": "Run only the toolkit harness tests.",
         "test:plugin": "Run a focused plugin profile; pass the plugin slug after --.",
