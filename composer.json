@@ -6,6 +6,29 @@
         "yoast/phpunit-polyfills": "^1.1"
     },
     "config": {
+        "process-timeout": 0,
         "sort-packages": true
+    },
+    "scripts": {
+        "doctor": "bash doctor-host.sh",
+        "test": "bash run-tests-host.sh",
+        "test:harness": "bash run-tests-host.sh --profile=harness",
+        "test:plugin": "bash run-tests-host.sh --profile=plugin",
+        "test:theme": "bash run-tests-host.sh --profile=theme",
+        "test:multisite": "bash run-tests-host.sh --profile=multisite",
+        "test:destructive": "bash run-tests-host.sh --include-destructive --group destructive",
+        "test:coverage": "bash run-tests-host.sh --coverage",
+        "test:junit": "bash run-tests-host.sh --junit"
+    },
+    "scripts-descriptions": {
+        "doctor": "Run the read-only DDEV and PHPUnit safety preflight.",
+        "test": "Run the default WordPress integration profile.",
+        "test:harness": "Run only the toolkit harness tests.",
+        "test:plugin": "Run a focused plugin profile; pass the plugin slug after --.",
+        "test:theme": "Run a focused theme profile; pass the theme slug after --.",
+        "test:multisite": "Run the multisite integration profile.",
+        "test:destructive": "Run tests in the destructive PHPUnit group.",
+        "test:coverage": "Run tests with opt-in code coverage.",
+        "test:junit": "Run tests and write a JUnit report."
     }
 }
