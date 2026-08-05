@@ -53,4 +53,24 @@ final class ManifestTest extends IntegrationTestCase
 			$config
 		);
 	}
+
+	public function test_fixture_self_tests_are_limited_to_harness_profile(): void
+	{
+		$toolkit = dirname(__DIR__);
+		$manifest = Manifest::fromFile($toolkit . '/runtime/manifest.json');
+		$config = (string) file_get_contents($toolkit . '/runtime/phpunit.xml');
+
+		if ($manifest->profile() === 'harness') {
+			$this->assertStringNotContainsString(
+				'<group>harness-fixture</group>',
+				$config
+			);
+			return;
+		}
+
+		$this->assertStringContainsString(
+			'<group>harness-fixture</group>',
+			$config
+		);
+	}
 }
