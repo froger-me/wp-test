@@ -64,7 +64,9 @@ composer test:plugin -- plugin-slug --filter UpgradeTest
 composer test -- --order-by=random --random-order-seed=12345
 ```
 
-`composer test:coverage` requires Xdebug or PCOV to be enabled explicitly. Coverage is written to `.test-tools/coverage/`. `composer test:junit` writes `.test-tools/runtime/junit.xml`.
+`composer test:coverage` requires Xdebug or PCOV to be loaded explicitly. With DDEV Xdebug, run `ddev xdebug on` first and `ddev xdebug off` afterward. The toolkit forces `XDEBUG_MODE=off` for Doctor, WP-CLI, manifest generation, and other preparation processes, then enables `XDEBUG_MODE=coverage` only for the final PHPUnit process. This prevents step-debug connection attempts and fails the run if the requested coverage driver is not actually active. Coverage is written to `.test-tools/coverage/`.
+
+`composer test:junit` writes `.test-tools/runtime/junit.xml`.
 
 ## Default integration profile
 
