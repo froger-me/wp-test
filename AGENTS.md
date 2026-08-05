@@ -4,7 +4,7 @@
 
 This repository is installed as `.test-tools` inside an existing complete WordPress root. Its parent directory is the consuming WordPress installation.
 
-The goal is a lightweight, deterministic local test surface for plugin and theme combinations, using DDEV for runtime isolation and conventional project commands such as `composer test`.
+The goal is a lightweight, deterministic local test and development utility surface for plugin and theme combinations, using DDEV for runtime isolation and conventional project commands such as `composer test` and `composer tail:log`.
 
 ## Non-negotiable rules
 
@@ -14,7 +14,7 @@ The goal is a lightweight, deterministic local test surface for plugin and theme
 4. Every public Composer command must be available with the same name and behavior from both the consuming WordPress root and the `.test-tools` directory.
 5. Developers must not need to enter `ddev sh` for normal work. Host wrappers may use `ddev wp` or `ddev exec`, but not lifecycle or configuration commands.
 6. Never add site-specific domains, absolute user paths, SSH aliases, secrets, passwords, API keys, buckets, or service credentials.
-7. Never silently alter the consuming site's persistent database, active plugin set, theme, uploads, or source files.
+7. Never silently alter the consuming site's persistent database, active plugin set, theme, uploads, or source files. A command that intentionally changes a local file, such as `composer clear:log`, must be narrowly scoped and documented.
 8. Generated dependencies, downloaded WordPress copies, runtime overlays, reports, caches, and browser artifacts must remain ignored.
 9. Agents must never add GitHub CI configuration or workflow files. Do not create or modify `.github/workflows/`, GitHub Actions YAML, or any equivalent GitHub-hosted CI setup.
 
@@ -39,6 +39,7 @@ Expected paths and state:
 - plugins: `wp-content/plugins`;
 - must-use plugins: `wp-content/mu-plugins`;
 - themes: `wp-content/themes`;
+- local WordPress debug log: `wp-content/debug.log`;
 - working database: `db`;
 - PHPUnit database: `wp_tests`;
 - PHPUnit table prefix: `wptests_`;
@@ -52,6 +53,8 @@ Current public commands are exposed from both the consuming WordPress root and `
 
 ```text
 composer doctor
+composer tail:log
+composer clear:log
 composer test
 composer test:harness
 composer test:plugin -- <slug>
@@ -72,6 +75,7 @@ Rules:
 - invalid profiles and slugs fail before PHPUnit starts;
 - commands never manage DDEV lifecycle;
 - `composer doctor` is read-only;
+- `composer tail:log` and `composer clear:log` operate only on the local `wp-content/debug.log` after validating local WordPress logging configuration and writability;
 - destructive tests remain excluded unless explicitly requested;
 - coverage remains opt-in;
 - public command changes require README and SETUP updates in the same commit.
@@ -153,6 +157,7 @@ Keep this surface small. New keys require validation, documentation, examples, a
 - Default runs exclude `destructive`.
 - Test uploads and plugin-generated content belong under the runtime overlay.
 - Never write fixtures into the consuming site's real plugin, theme, or upload directories.
+- `composer clear:log` may truncate only the validated local `wp-content/debug.log`; it must not delete it or target configurable remote paths.
 
 ## External services
 
@@ -199,11 +204,11 @@ Document helper changes before treating them as stable public APIs.
 - Use `exec` for final long-running processes.
 - Prefer a small PHP helper over nested shell quoting.
 - PHP files use `declare(strict_types=1);`.
-- Exceptions must identify the failed command, extension, path, database, or configuration key.
+- Exceptions and command errors must identify the failed command, extension, path, database, or configuration key.
 - Do not accidentally raise the documented PHP requirement.
 - Avoid frameworks and unnecessary abstraction layers.
 - Prefer a small number of cohesive files.
-- Centralize path resolution, environment checks, version detection, and selection logic.
+- Centralize path resolution, environment checks, version detection, selection logic, and logging-target validation.
 
 ## Generated files
 
@@ -246,7 +251,7 @@ Documentation is part of implementation. Update `README.md` and/or `SETUP.md` in
 Document structure:
 
 - `README.md`: purpose, capabilities, daily use, behavior, limitations, and links;
-- `SETUP.md`: complete installation, database, ignore, update, and troubleshooting steps;
+- `SETUP.md`: complete installation, database, logging, ignore, update, and troubleshooting steps;
 - `PLAN.md`: unfinished work, sequence, and acceptance criteria;
 - `AGENTS.md`: repository goals and maintenance rules.
 
@@ -276,6 +281,15 @@ composer test:multisite
 composer test:destructive
 composer test:junit
 ```
+
+For logging changes, additionally verify:
+
+```bash
+composer clear:log
+(cd .test-tools && composer clear:log)
+```
+
+Start `composer tail:log` from both supported directories, append a line to `wp-content/debug.log`, confirm it appears immediately, and stop the command with `Ctrl+C` without stopping DDEV.
 
 Coverage validation requires Xdebug or PCOV and remains optional.
 
