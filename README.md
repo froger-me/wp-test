@@ -1,127 +1,237 @@
 # wp-test
 
-`wp-test` is a portable local testing toolkit for an existing, complete WordPress installation.
+`wp-test` is a portable PHPUnit integration-test toolkit for an existing, complete WordPress installation.
 
-It is designed to be cloned as `.test-tools` inside a WordPress file tree that is served by DDEV. The working site keeps all of its plugins, themes, uploads, settings, custom tables, and plugin combinations, while PHPUnit runs against a separate disposable `wp_tests` database.
+Install it as `.test-tools` inside a WordPress root served by DDEV. The working site keeps its real plugins, themes, uploads, settings, custom tables, and plugin combinations. Tests boot a matching clean WordPress copy against the separate disposable `wp_tests` database and an isolated runtime `wp-content` overlay.
 
-## Current capabilities
+See [SETUP.md](SETUP.md) for the complete installation guide.
 
-- Runs with the standard project command `composer test` from the WordPress root.
-- Uses DDEV for PHP, WordPress, MariaDB/MySQL, WP-CLI, Composer, and test execution.
-- Detects the installed WordPress version and downloads the matching clean WordPress core and PHPUnit test library.
-- Refreshes the active-plugin list from the working local site before each test run.
-- Loads the same active plugins through WordPress's normal bootstrap.
-- Runs registered plugin activation hooks against the test database so plugin options and custom tables can be installed.
-- Loads must-use plugins when `wp-content/mu-plugins` exists.
-- Blocks unmocked external HTTP requests during PHPUnit execution.
-- Leaves the working DDEV database untouched.
-- Does not start, restart, or rebuild DDEV when tests run.
+## Safety model
 
-## Requirements
+- The interactive DDEV site uses database `db`.
+- PHPUnit uses database `wp_tests` with prefix `wptests_`.
+- Every test entry point runs the same safety preflight before WordPress test tables are changed.
+- `composer doctor` is read-only and exits nonzero when the suite cannot run safely.
+- Test commands never start, stop, restart, rebuild, or reconfigure DDEV.
+- Unmocked requests through the WordPress HTTP API are blocked.
+- Test uploads and runtime links live under `.test-tools/runtime/`, not the working `wp-content`.
+- Destructive tests are excluded from the default run.
 
-- An existing WordPress file tree.
-- Docker Desktop or another DDEV-supported container runtime.
-- DDEV.
-- Composer available on the host so `composer test` can be used directly.
-- PHP 8.0 or later in the DDEV web container for the current toolkit code.
+## Public commands
 
-## Getting started
-
-The complete guide covers:
-
-1. wrapping an existing WordPress file tree in DDEV;
-2. either creating a clean local database or importing an existing database;
-3. installing this repository as `.test-tools`;
-4. configuring `composer test`;
-5. excluding local tooling from SFTP and source-control uploads; and
-6. running and updating the suite.
-
-See [SETUP.md](SETUP.md).
-
-## Daily use
-
-Start the development environment explicitly:
+The consuming WordPress root exposes these Composer scripts:
 
 ```bash
-ddev start
-```
-
-Run the PHPUnit surface from the WordPress root:
-
-```bash
+composer doctor
 composer test
+composer test:harness
+composer test:plugin -- plugin-slug
+composer test:theme -- theme-slug
+composer test:multisite
+composer test:destructive
+composer test:coverage
+composer test:junit
 ```
 
-Pass PHPUnit arguments after `--`:
+Native PHPUnit arguments pass through:
 
 ```bash
-composer test -- --filter ActivePluginsTest
-composer test -- --testsuite "Shared WordPress integration tests"
+composer test -- --filter SettingsTest
+composer test -- --group rest
+composer test:plugin -- plugin-slug --filter UpgradeTest
+composer test -- --order-by=random --random-order-seed=12345
 ```
 
-Stop the environment explicitly when finished:
+`composer test:coverage` requires Xdebug or PCOV to be enabled explicitly. Coverage is written to `.test-tools/coverage/`. `composer test:junit` writes `.test-tools/runtime/junit.xml`.
+
+## Default integration profile
+
+`composer test`:
+
+1. verifies DDEV, database isolation, required tools, PHP extensions, writable generated paths, and the WordPress/PHP/PHPUnit compatibility policy;
+2. reads the working site's active ordinary plugins, active theme, and parent theme;
+3. applies optional selection rules from `<wordpress-root>/.wp-test.php`;
+4. synchronizes a clean WordPress core and WordPress PHPUnit library to the installed WordPress version;
+5. creates an isolated runtime `wp-content` containing links to only the selected extensions;
+6. boots WordPress using the selected plugin load order and theme;
+7. activates each selected plugin through WordPress's normal `activate_plugin()` lifecycle against `wp_tests`;
+8. loads conventional extension test bootstraps;
+9. discovers conventional plugin and theme PHPUnit tests; and
+10. runs the harness and extension suites.
+
+The working `db` database and working upload directory are not used by PHPUnit.
+
+## Extension test conventions
+
+Active plugins are included by default. The active theme and its parent theme are included by default.
+
+Plugin tests:
+
+```text
+wp-content/plugins/<slug>/tests/phpunit/**/*Test.php
+wp-content/plugins/<slug>/tests/phpunit/bootstrap.php       # optional
+```
+
+Theme tests:
+
+```text
+wp-content/themes/<slug>/tests/phpunit/**/*Test.php
+wp-content/themes/<slug>/tests/phpunit/bootstrap.php        # optional
+```
+
+An extension bootstrap is loaded after the WordPress test functions are available but before WordPress boots. It may define constants, load an extension-local Composer autoloader, or register `tests_add_filter()` callbacks. It should not assume that the complete WordPress runtime has loaded yet.
+
+Missing test directories and bootstraps are normal. A malformed bootstrap fails with the extension type, slug, and path.
+
+## Focused profiles
 
 ```bash
-ddev stop
+composer test:plugin -- plugin-slug
+composer test:theme -- theme-slug
 ```
 
-`composer test` intentionally fails when DDEV is not running. Test commands do not manage the environment lifecycle.
+A focused plugin run loads the selected plugin, configured plugin dependencies, and the working theme for runtime compatibility. Only the selected plugin's conventional tests are added.
 
-## What happens during `composer test`
+A focused theme run loads the selected theme and parent theme plus any configured plugin dependencies. Only the selected theme's conventional tests are added.
 
-1. The host runner reads the working site's `active_plugins` option through WP-CLI.
-2. The container runner checks the installed WordPress version.
-3. If WordPress was updated, the matching clean core and WordPress PHPUnit library are downloaded automatically.
-4. PHPUnit installs a clean test site in the `wp_tests` database using the `wptests_` table prefix.
-5. The locally active plugins are loaded and their activation hooks are run against `wp_tests`.
-6. Unmocked WordPress HTTP API requests are rejected.
-7. The test suite runs without modifying the working site's `db` database.
+Invalid or excluded slugs fail before PHPUnit starts.
+
+## Optional site configuration
+
+Copy `.test-tools/wp-test.config.example.php` to `<wordpress-root>/.wp-test.php` only when the active-site defaults are insufficient.
+
+Supported keys:
+
+- `include_plugins`
+- `exclude_plugins`
+- `include_themes`
+- `exclude_themes`
+- `plugin_dependencies`
+- `theme_dependencies`
+- `bootstrap`
+
+The configuration file must return an array. Paths are relative to the WordPress root unless absolute.
+
+## Lifecycle behavior
+
+Selected plugins are loaded in the same order as the working site's `active_plugins` option. After the clean WordPress test site boots, the toolkit:
+
+- creates and selects a test administrator;
+- clears the generated test site's active-plugin option;
+- activates each selected plugin with WordPress's normal activation API;
+- reports activation output or errors with the responsible plugin path; and
+- supports network-wide activation in `composer test:multisite`.
+
+Activation callbacks can create options, custom tables, roles, cron events, rewrite rules, and upload files inside isolated test state. Repeated suite runs recreate the WordPress test installation.
+
+Destructive plugin uninstall tests must use PHPUnit group `destructive`. They run only through:
+
+```bash
+composer test:destructive
+```
+
+## Reusable helpers
+
+Extension tests may extend:
+
+```php
+use WpTest\IntegrationTestCase;
+```
+
+The base class provides helpers for:
+
+- tracked option cleanup;
+- custom-table and column assertions;
+- cron assertions;
+- administrator creation;
+- REST requests;
+- isolated upload files;
+- captured mail;
+- activation, deactivation, and uninstall operations.
+
+Lifecycle helpers refuse to run unless `DB_NAME` is `wp_tests` and the active table prefix is `wptests_`.
+
+### HTTP mocks
+
+Unmocked WordPress HTTP requests return `WP_Error` code `unexpected_http_request`.
+
+Queue deterministic responses with `WpTest\HttpMock`:
+
+```php
+use WpTest\HttpMock;
+
+HttpMock::queue(
+	'https://service.example.test/api',
+	HttpMock::response('{"ok":true}', 200),
+	HttpMock::rateLimited(30),
+	HttpMock::timeout()
+);
+```
+
+Available patterns include normal responses, `WP_Error`, malformed JSON, rate limits, delays, and sequential responses. Provider-specific clients and credentials remain in plugin code and local ignored configuration.
+
+### Mail capture
+
+```php
+$this->enableMailCapture();
+
+wp_mail('recipient@example.test', 'Subject', 'Body');
+
+$this->assertCount(1, $this->capturedMail());
+```
+
+## Compatibility policy
+
+The toolkit currently requires PHP 8.0 or later and PHPUnit 9.6. `composer doctor` compares the installed WordPress branch and DDEV PHP version against the compatibility policy in `.test-tools/config.php`.
+
+Unknown future WordPress branches fail explicitly instead of silently running with an unverified PHPUnit stack. Updating WordPress within a covered branch automatically refreshes the matching clean core and WordPress test library on the next test run.
 
 ## Repository layout
 
-This repository's root becomes `.test-tools` in the consuming WordPress installation.
-
 ```text
 .test-tools/
+├── autoload.php
+├── bin/
+├── fixtures/
+├── src/
+├── tests/
 ├── bootstrap.php
-├── composer.json
-├── composer.lock
+├── config.php
+├── doctor-host.sh
 ├── phpunit.xml.dist
 ├── run-tests-host.sh
 ├── run-tests.sh
 ├── sync-wordpress-tests.sh
-└── tests/
+└── wp-test.config.example.php
 ```
 
-Generated dependencies, downloaded WordPress files, the generated active-plugin list, and test artifacts are excluded by this repository's `.gitignore`.
+Generated content is ignored:
 
-## Updating the toolkit
+```text
+.test-tools/vendor/
+.test-tools/wordpress/
+.test-tools/wordpress-tests-lib/
+.test-tools/runtime/
+.test-tools/coverage/
+.test-tools/.wordpress-test-version
+```
 
-From the consuming WordPress root:
+## Updating
+
+From the WordPress root:
 
 ```bash
 git -C .test-tools pull --ff-only
 ddev exec --dir=/var/www/html/.test-tools composer install
+composer doctor
+composer test:harness
 composer test
 ```
 
-When the installed WordPress core is updated, no toolkit configuration change is required. The next `composer test` synchronizes the clean test core and WordPress test library to the detected version.
+When public commands, setup steps, consumed plugin/theme paths, configuration files, helpers, or generated paths change, the documentation must change in the same commit.
 
-## Safety model
+## Next phases
 
-- `db` is the persistent interactive development database.
-- `wp_tests` is the disposable PHPUnit database.
-- The suite must never run destructive test operations against `db`.
-- External HTTP calls are denied unless a test supplies a mock response.
-- Remote service credentials should not be stored in this repository.
-- DDEV startup, shutdown, image rebuilds, and database imports remain explicit developer actions.
+Phase 1, the PHPUnit surface, is implemented. The remaining work is documented in [PLAN.md](PLAN.md), beginning with standard log commands and then Playwright E2E testing.
 
-## Current limitations
-
-The current suite validates the shared harness and active-plugin bootstrap. Plugin- and theme-local test discovery, lifecycle-specific test helpers, multisite execution, Playwright E2E testing, and standard log commands are planned but not yet implemented.
-
-See [PLAN.md](PLAN.md) for the detailed continuation plan.
-
-## Contributing and agent guidance
-
-Repository modification rules and maintenance expectations are documented in [AGENTS.md](AGENTS.md).
+Repository maintenance rules are in [AGENTS.md](AGENTS.md).
