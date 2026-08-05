@@ -19,7 +19,12 @@ See [SETUP.md](SETUP.md) for the complete installation guide.
 
 ## Public commands
 
-The consuming WordPress root exposes these Composer scripts:
+The same Composer scripts are available from either:
+
+- the consuming WordPress root; or
+- the `.test-tools` directory itself.
+
+From the WordPress root:
 
 ```bash
 composer doctor
@@ -33,7 +38,24 @@ composer test:coverage
 composer test:junit
 ```
 
-Native PHPUnit arguments pass through:
+From inside `.test-tools`, the command names and behavior are identical:
+
+```bash
+cd .test-tools
+composer doctor
+composer test
+composer test:harness
+composer test:plugin -- plugin-slug
+composer test:theme -- theme-slug
+composer test:multisite
+composer test:destructive
+composer test:coverage
+composer test:junit
+```
+
+The host wrappers resolve the WordPress root from the `.test-tools` installation path before invoking DDEV. They do not depend on the shell's original working directory and do not require `ddev sh`.
+
+Native PHPUnit arguments pass through from either location:
 
 ```bash
 composer test -- --filter SettingsTest
@@ -196,6 +218,7 @@ Unknown future WordPress branches fail explicitly instead of silently running wi
 ├── src/
 ├── tests/
 ├── bootstrap.php
+├── composer.json
 ├── config.php
 ├── doctor-host.sh
 ├── phpunit.xml.dist
@@ -223,6 +246,15 @@ From the WordPress root:
 ```bash
 git -C .test-tools pull --ff-only
 ddev exec --dir=/var/www/html/.test-tools composer install
+composer doctor
+composer test:harness
+composer test
+```
+
+After updating, the same checks may instead be run from the toolkit directory:
+
+```bash
+cd .test-tools
 composer doctor
 composer test:harness
 composer test
