@@ -57,22 +57,23 @@ final class IntegrationHelpersTest extends IntegrationTestCase
 			$this->activatePlugin(self::PLUGIN);
 		}
 
-		do_action('rest_api_init', rest_get_server());
+		$route = '/wp-test/v1/protected';
+		$server = rest_get_server();
+
+		if (! isset($server->get_routes()[$route])) {
+			do_action('rest_api_init', $server);
+		}
+
+		$this->assertArrayHasKey($route, $server->get_routes());
 
 		wp_set_current_user(0);
 
-		$forbidden = $this->restRequest(
-			'GET',
-			'/wp-test/v1/protected'
-		);
+		$forbidden = $this->restRequest('GET', $route);
 		$this->assertSame(401, $forbidden->get_status());
 
 		$this->createAdministrator();
 
-		$allowed = $this->restRequest(
-			'GET',
-			'/wp-test/v1/protected'
-		);
+		$allowed = $this->restRequest('GET', $route);
 		$this->assertSame(200, $allowed->get_status());
 		$this->assertSame(['ok' => true], $allowed->get_data());
 
