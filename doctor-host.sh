@@ -17,6 +17,7 @@ if ! ddev exec --raw true >/dev/null 2>&1; then
 	exit 1
 fi
 
-exec ddev exec --raw php \
-	/var/www/html/.test-tools/bin/doctor.php \
+exec ddev exec --raw env \
+	XDEBUG_MODE=off \
+	php /var/www/html/.test-tools/bin/doctor.php \
 	"$@"
