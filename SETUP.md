@@ -19,6 +19,8 @@ wordpress-root/
 
 The existing WordPress files remain the files you edit and deploy. DDEV supplies the local web server, PHP runtime, database, WP-CLI, and containerized test execution.
 
+All toolkit Composer commands work from either the WordPress root or the `.test-tools` directory. The root `composer.json` mirrors the command names for convenience; `.test-tools/composer.json` contains the toolkit's own command mappings.
+
 ## 1. Install host prerequisites
 
 On macOS:
@@ -31,7 +33,7 @@ mkcert -install
 
 Open Docker Desktop and wait for its engine to run.
 
-The WordPress root command surface uses host Composer:
+Host Composer provides the routine command surface from both supported directories:
 
 ```bash
 docker info --format 'Docker engine: {{.ServerVersion}}'
@@ -260,6 +262,8 @@ git clone https://github.com/froger-me/wp-test.git .test-tools
 ddev exec --dir=/var/www/html/.test-tools composer install
 ```
 
+The cloned `.test-tools/composer.json` already exposes every toolkit command. No root Composer configuration is required when commands will only be run from inside `.test-tools`.
+
 Ensure the existing shell entry points remain executable:
 
 ```bash
@@ -271,36 +275,53 @@ chmod +x \
 
 `doctor-host.sh` is invoked through `bash` and does not require an executable bit.
 
-## 10. Add root Composer scripts
+## 10. Mirror the commands at the WordPress root
 
-Create or merge these entries into the WordPress root `composer.json`:
+To use the same commands without changing into `.test-tools`, create or merge these entries into the WordPress root `composer.json`:
 
 ```json
 {
     "name": "local/wordpress-development-site",
     "private": true,
+    "config": {
+        "process-timeout": 0
+    },
     "scripts": {
         "doctor": "bash .test-tools/doctor-host.sh",
-        "test": ".test-tools/run-tests-host.sh",
-        "test:harness": ".test-tools/run-tests-host.sh --profile=harness",
-        "test:plugin": ".test-tools/run-tests-host.sh --profile=plugin",
-        "test:theme": ".test-tools/run-tests-host.sh --profile=theme",
-        "test:multisite": ".test-tools/run-tests-host.sh --profile=multisite",
-        "test:destructive": ".test-tools/run-tests-host.sh --include-destructive --group destructive",
-        "test:coverage": ".test-tools/run-tests-host.sh --coverage",
-        "test:junit": ".test-tools/run-tests-host.sh --junit"
+        "test": "bash .test-tools/run-tests-host.sh",
+        "test:harness": "bash .test-tools/run-tests-host.sh --profile=harness",
+        "test:plugin": "bash .test-tools/run-tests-host.sh --profile=plugin",
+        "test:theme": "bash .test-tools/run-tests-host.sh --profile=theme",
+        "test:multisite": "bash .test-tools/run-tests-host.sh --profile=multisite",
+        "test:destructive": "bash .test-tools/run-tests-host.sh --include-destructive --group destructive",
+        "test:coverage": "bash .test-tools/run-tests-host.sh --coverage",
+        "test:junit": "bash .test-tools/run-tests-host.sh --junit"
     }
 }
 ```
 
-Do not replace unrelated existing Composer configuration.
+Do not replace unrelated existing Composer configuration. Keep the root command names and arguments aligned with `.test-tools/composer.json`.
+
+Both Composer files invoke the same host wrappers. The wrappers resolve the WordPress root from their own installation path before calling DDEV, so behavior does not depend on whether Composer was started in the WordPress root or `.test-tools`.
 
 ## 11. Run diagnostics and harness tests
+
+From the WordPress root:
 
 ```bash
 composer doctor
 composer test:harness
 ```
+
+Or from inside the toolkit:
+
+```bash
+cd .test-tools
+composer doctor
+composer test:harness
+```
+
+The results and side effects are identical. Neither form requires `ddev sh`, and neither form starts or rebuilds DDEV.
 
 `composer doctor` is read-only. It verifies:
 
@@ -318,6 +339,8 @@ composer test:harness
 `composer test:harness` additionally proves lifecycle activation, custom tables, options, roles, cron, REST authorization, uploads, mail capture, HTTP isolation, extension discovery, and helper cleanup using toolkit fixture extensions.
 
 ## 12. Run the working-site integration profile
+
+From either supported directory:
 
 ```bash
 composer test
@@ -339,7 +362,7 @@ Extension bootstraps run before WordPress boots. Use them for constants, local C
 
 ## 13. Add optional project configuration
 
-When the active-site defaults need adjustment:
+When the active-site defaults need adjustment, run this from the WordPress root:
 
 ```bash
 cp .test-tools/wp-test.config.example.php .wp-test.php
@@ -374,6 +397,8 @@ return [
 The optional site bootstrap is loaded at the same pre-WordPress stage as extension bootstraps.
 
 ## 14. Focused and specialist runs
+
+These commands work from the WordPress root or `.test-tools`:
 
 ```bash
 composer test:plugin -- my-plugin
@@ -480,7 +505,7 @@ The toolkit ignores:
 
 ## 18. WordPress and toolkit updates
 
-After a WordPress update:
+After a WordPress update, run from either supported directory:
 
 ```bash
 composer doctor
@@ -489,7 +514,7 @@ composer test
 
 The next test run synchronizes the clean core and WordPress test library to the detected WordPress version. An unknown WordPress branch fails with an explicit compatibility message.
 
-Update the toolkit:
+Update the toolkit from the WordPress root:
 
 ```bash
 git -C .test-tools pull --ff-only
@@ -499,15 +524,28 @@ composer test:harness
 composer test
 ```
 
+Or run the post-update checks inside `.test-tools`:
+
+```bash
+cd .test-tools
+composer doctor
+composer test:harness
+composer test
+```
+
 ## Troubleshooting
 
 ### DDEV is stopped
 
-`composer doctor` and all test commands fail. Start DDEV explicitly:
+`composer doctor` and all test commands fail from both supported directories. Start DDEV explicitly from the WordPress root:
 
 ```bash
 ddev start
 ```
+
+### Command exists in only one directory
+
+Update `.test-tools`, then compare the root `scripts` entries from Step 10 with `.test-tools/composer.json`. Public command names must remain mirrored.
 
 ### `wp_tests` is missing
 
