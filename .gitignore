@@ -5,6 +5,7 @@ active-plugins.json
 coverage/
 node_modules/
 playwright-report/
+runtime/
 test-results/
 vendor/
 wordpress/

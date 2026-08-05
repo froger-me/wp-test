@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
-final class ExternalHttpIsolationTest extends WP_UnitTestCase
+use WpTest\HttpMock;
+use WpTest\IntegrationTestCase;
+
+final class ExternalHttpIsolationTest extends IntegrationTestCase
 {
 	public function test_unmocked_external_http_request_is_blocked(): void
 	{
@@ -17,58 +20,56 @@ final class ExternalHttpIsolationTest extends WP_UnitTestCase
 		);
 	}
 
-	public function test_mocked_http_response_is_allowed(): void
+	public function test_success_and_failure_responses_can_be_queued(): void
 	{
-		$url = 'https://example.test/mock';
+		$url = 'https://service.example.test/sequence';
 
-		$mock_response = [
-			'headers'  => [],
-			'body'     => '{"success":true}',
-			'response' => [
-				'code'    => 200,
-				'message' => 'OK',
-			],
-			'cookies'  => [],
-			'filename' => null,
-		];
-
-		$mock_filter = static function (
-			$preempt,
-			array $parsed_args,
-			string $requested_url
-		) use ($url, $mock_response) {
-			if ($requested_url === $url) {
-				return $mock_response;
-			}
-
-			return $preempt;
-		};
-
-		add_filter(
-			'pre_http_request',
-			$mock_filter,
-			5,
-			3
+		HttpMock::queue(
+			$url,
+			HttpMock::response('{"ok":true}', 200),
+			HttpMock::error('service_down', 'Service unavailable.')
 		);
 
-		try {
-			$response = wp_remote_get($url);
+		$success = wp_remote_get($url);
+		$failure = wp_remote_get($url);
 
-			$this->assertNotWPError($response);
-			$this->assertSame(
-				200,
-				wp_remote_retrieve_response_code($response)
-			);
-			$this->assertSame(
-				'{"success":true}',
-				wp_remote_retrieve_body($response)
-			);
-		} finally {
-			remove_filter(
-				'pre_http_request',
-				$mock_filter,
-				5
-			);
-		}
+		$this->assertNotWPError($success);
+		$this->assertSame(200, wp_remote_retrieve_response_code($success));
+		$this->assertSame('{"ok":true}', wp_remote_retrieve_body($success));
+		$this->assertWPError($failure);
+		$this->assertSame('service_down', $failure->get_error_code());
+	}
+
+	public function test_timeout_malformed_json_rate_limit_and_delay_are_available(): void
+	{
+		$timeoutUrl = 'https://service.example.test/timeout';
+		$jsonUrl    = 'https://service.example.test/json';
+		$rateUrl    = 'https://service.example.test/rate';
+		$delayUrl   = 'https://service.example.test/delay';
+
+		HttpMock::queue($timeoutUrl, HttpMock::timeout());
+		HttpMock::queue($jsonUrl, HttpMock::malformedJson());
+		HttpMock::queue($rateUrl, HttpMock::rateLimited(30));
+		HttpMock::queue(
+			$delayUrl,
+			HttpMock::delayed(HttpMock::response('delayed'), 1)
+		);
+
+		$this->assertWPError(wp_remote_get($timeoutUrl));
+		$this->assertSame(
+			'{"invalid":',
+			wp_remote_retrieve_body(wp_remote_get($jsonUrl))
+		);
+
+		$rate = wp_remote_get($rateUrl);
+		$this->assertSame(429, wp_remote_retrieve_response_code($rate));
+		$this->assertSame(
+			'30',
+			wp_remote_retrieve_header($rate, 'retry-after')
+		);
+		$this->assertSame(
+			'delayed',
+			wp_remote_retrieve_body(wp_remote_get($delayUrl))
+		);
 	}
 }
