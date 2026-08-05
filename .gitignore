@@ -1,0 +1,5 @@
+.wordpress-test-version
+vendor
+wordpress
+wordpress-tests-lib
+active-plugins.json

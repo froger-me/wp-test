@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+	bootstrap="bootstrap.php"
+	colors="true"
+	failOnRisky="true"
+	failOnWarning="true"
+	cacheResult="false"
+>
+	<testsuites>
+		<testsuite name="Shared WordPress integration tests">
+			<directory suffix="Test.php">tests</directory>
+		</testsuite>
+	</testsuites>
+</phpunit>
