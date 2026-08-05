@@ -103,25 +103,11 @@ foreach ($manifest->plugins() as $plugin) {
 	$link($source, $target);
 }
 
-$fixturePlugin = $toolkitRoot . '/fixtures/plugins/wp-test-lifecycle';
-$fixtureTarget = $contentRoot . '/plugins/wp-test-lifecycle';
-
-if (! file_exists($fixtureTarget) && ! is_link($fixtureTarget)) {
-	$link($fixturePlugin, $fixtureTarget);
-}
-
 foreach ($manifest->themes() as $theme) {
 	$link(
 		(string) $theme['source_path'],
 		$contentRoot . '/themes/' . (string) $theme['slug']
 	);
-}
-
-$fixtureTheme = $toolkitRoot . '/fixtures/themes/wp-test-theme';
-$fixtureThemeTarget = $contentRoot . '/themes/wp-test-theme';
-
-if (! file_exists($fixtureThemeTarget) && ! is_link($fixtureThemeTarget)) {
-	$link($fixtureTheme, $fixtureThemeTarget);
 }
 
 $realMuPlugins = $projectRoot . '/wp-content/mu-plugins';
