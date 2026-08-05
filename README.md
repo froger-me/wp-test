@@ -12,22 +12,22 @@ See [SETUP.md](SETUP.md) for the complete installation guide.
 - PHPUnit uses database `wp_tests` with prefix `wptests_`.
 - Every test entry point runs the same safety preflight before WordPress test tables are changed.
 - `composer doctor` is read-only and exits nonzero when the suite cannot run safely.
-- Test commands never start, stop, restart, rebuild, or reconfigure DDEV.
+- Test and logging commands never start, stop, restart, rebuild, or reconfigure DDEV.
 - Unmocked requests through the WordPress HTTP API are blocked.
 - Test uploads and runtime links live under `.test-tools/runtime/`, not the working `wp-content`.
 - Destructive tests are excluded from the default run.
+- Logging commands operate only on the local `wp-content/debug.log` file after validating the DDEV logging configuration.
 
 ## Public commands
 
-The same Composer scripts are available from either:
-
-- the consuming WordPress root; or
-- the `.test-tools` directory itself.
+The same Composer scripts are available from either the consuming WordPress root or the `.test-tools` directory itself.
 
 From the WordPress root:
 
 ```bash
 composer doctor
+composer tail:log
+composer clear:log
 composer test
 composer test:harness
 composer test:plugin -- plugin-slug
@@ -43,6 +43,8 @@ From inside `.test-tools`, the command names and behavior are identical:
 ```bash
 cd .test-tools
 composer doctor
+composer tail:log
+composer clear:log
 composer test
 composer test:harness
 composer test:plugin -- plugin-slug
@@ -67,6 +69,39 @@ composer test -- --order-by=random --random-order-seed=12345
 `composer test:coverage` requires Xdebug or PCOV to be loaded explicitly. With DDEV Xdebug, run `ddev xdebug on` first and `ddev xdebug off` afterward. The toolkit forces `XDEBUG_MODE=off` for Doctor, WP-CLI, manifest generation, and other preparation processes, then enables `XDEBUG_MODE=coverage` only for the final PHPUnit process. This prevents step-debug connection attempts and fails the run if the requested coverage driver is not actually active. Coverage is written to `.test-tools/coverage/`.
 
 `composer test:junit` writes `.test-tools/runtime/junit.xml`.
+
+## Local WordPress logging
+
+The logging commands require DDEV to be running and require local WordPress logging to resolve to `wp-content/debug.log`:
+
+```php
+defined('WP_DEBUG') || define('WP_DEBUG', true);
+defined('WP_DEBUG_LOG') || define('WP_DEBUG_LOG', $is_ddev);
+defined('WP_DEBUG_DISPLAY') || define('WP_DEBUG_DISPLAY', false);
+```
+
+Follow the log:
+
+```bash
+composer tail:log
+```
+
+The command validates `WP_DEBUG` and `WP_DEBUG_LOG`, creates `wp-content/debug.log` when its directory is writable, and then runs `tail -F` inside the existing DDEV web container. `Ctrl+C` stops only the log follower; it does not stop DDEV.
+
+Clear the log without deleting it:
+
+```bash
+composer clear:log
+```
+
+A disabled debug configuration, a custom `WP_DEBUG_LOG` destination, or an unwritable file fails with an actionable error. The commands never edit `wp-config.php` and never contain a remote path or credential.
+
+DDEV already provides direct commands for container service logs, so the toolkit does not wrap them:
+
+```bash
+ddev logs -f
+ddev logs -s db -f
+```
 
 ## Default integration profile
 
@@ -218,6 +253,7 @@ Unknown future WordPress branches fail explicitly instead of silently running wi
 .test-tools/
 ├── autoload.php
 ├── bin/
+│   └── prepare-debug-log.php
 ├── fixtures/
 ├── src/
 ├── tests/
@@ -225,6 +261,7 @@ Unknown future WordPress branches fail explicitly instead of silently running wi
 ├── composer.json
 ├── config.php
 ├── doctor-host.sh
+├── log-host.sh
 ├── phpunit.xml.dist
 ├── run-tests-host.sh
 ├── run-tests.sh
@@ -268,6 +305,6 @@ When public commands, setup steps, consumed plugin/theme paths, configuration fi
 
 ## Next phases
 
-Phase 1, the PHPUnit surface, is implemented. The remaining work is documented in [PLAN.md](PLAN.md), beginning with standard log commands and then Playwright E2E testing.
+Phase 1, the PHPUnit surface, and Phase 2, the standard local logging commands, are implemented. The remaining work is documented in [PLAN.md](PLAN.md), beginning with Playwright E2E testing.
 
 Repository maintenance rules are in [AGENTS.md](AGENTS.md).
