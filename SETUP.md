@@ -9,7 +9,7 @@ wordpress-root/
 ├── .ddev/
 ├── .test-tools/
 ├── .wp-test.php                 # optional
-├── composer.json
+├── composer.json                # root command mirror
 ├── wp-admin/
 ├── wp-content/
 ├── wp-includes/
@@ -19,7 +19,7 @@ wordpress-root/
 
 The existing WordPress files remain the files you edit and deploy. DDEV supplies the local web server, PHP runtime, database, WP-CLI, and containerized test execution.
 
-All toolkit Composer commands work from either the WordPress root or the `.test-tools` directory. The root `composer.json` mirrors the command names for convenience; `.test-tools/composer.json` contains the toolkit's own command mappings.
+All toolkit Composer commands work from either the WordPress root or `.test-tools`. The root `composer.json` mirrors the toolkit commands for convenience.
 
 ## 1. Install host prerequisites
 
@@ -33,7 +33,7 @@ mkcert -install
 
 Open Docker Desktop and wait for its engine to run.
 
-Host Composer provides the routine command surface from both supported directories:
+Verify the host tools:
 
 ```bash
 docker info --format 'Docker engine: {{.ServerVersion}}'
@@ -91,7 +91,7 @@ defined('WP_DEBUG_LOG') || define('WP_DEBUG_LOG', $is_ddev);
 defined('WP_DEBUG_DISPLAY') || define('WP_DEBUG_DISPLAY', false);
 ```
 
-Make any server-specific PHP error-log path conditional:
+Make server-specific PHP error logging conditional:
 
 ```php
 ini_set('log_errors', '1');
@@ -234,14 +234,14 @@ WHERE SCHEMA_NAME = 'wp_tests';
 "
 ```
 
-The required names are fixed:
+The fixed safety values are:
 
 - working database: `db`
 - PHPUnit database: `wp_tests`
 - database host: `db`
 - PHPUnit prefix: `wptests_`
 
-The safety preflight refuses alternatives.
+`composer doctor` loads `wp-config-ddev.php`, confirms that WordPress actually uses database `db` on host `db`, connects with the generated DDEV credentials, and verifies that both `db` and `wp_tests` exist.
 
 ## 8. Add Subversion to DDEV
 
@@ -264,7 +264,7 @@ ddev exec --dir=/var/www/html/.test-tools composer install
 
 The cloned `.test-tools/composer.json` already exposes every toolkit command. No root Composer configuration is required when commands will only be run from inside `.test-tools`.
 
-Ensure the existing shell entry points remain executable:
+Ensure the shell entry points remain executable:
 
 ```bash
 chmod +x \
@@ -282,6 +282,7 @@ To use the same commands without changing into `.test-tools`, create or merge th
 ```json
 {
     "name": "local/wordpress-development-site",
+    "version": "1.0.0",
     "private": true,
     "config": {
         "process-timeout": 0
@@ -299,6 +300,16 @@ To use the same commands without changing into `.test-tools`, create or merge th
     }
 }
 ```
+
+The explicit local version prevents Composer from warning that it cannot infer a root-package version when the WordPress root is not itself a Git repository.
+
+For an existing root `composer.json`, add it with:
+
+```bash
+COMPOSER_ROOT_VERSION=1.0.0 composer config version 1.0.0
+```
+
+The temporary environment value suppresses the warning while Composer writes the permanent `version` field.
 
 Do not replace unrelated existing Composer configuration. Keep the root command names and arguments aligned with `.test-tools/composer.json`.
 
@@ -327,14 +338,17 @@ The results and side effects are identical. Neither form requires `ddev sh`, and
 
 - DDEV is already running;
 - the expected WordPress root exists;
-- DDEV exposes working database `db` on host `db`;
-- `wp_tests` exists;
+- `wp-config-ddev.php` defines the expected working database, host, user, and password;
+- the DDEV database service accepts those generated credentials;
+- working database `db` and PHPUnit database `wp_tests` both exist;
 - the test database and prefix are fixed and distinct from the working database;
 - required commands and PHP extensions are available;
 - generated directories are writable;
 - Composer dependencies are installed;
 - the installed WordPress and DDEV PHP versions are covered by the compatibility policy; and
 - an existing generated `wp-tests-config.php` still targets the safe database.
+
+Every public PHPUnit command uses this same Doctor implementation, including default, harness, plugin, theme, multisite, destructive, coverage, and JUnit profiles.
 
 `composer test:harness` additionally proves lifecycle activation, custom tables, options, roles, cron, REST authorization, uploads, mail capture, HTTP isolation, extension discovery, and helper cleanup using toolkit fixture extensions.
 
@@ -542,6 +556,16 @@ composer test
 ```bash
 ddev start
 ```
+
+### Composer cannot detect the root package version
+
+Add the explicit local version from Step 10:
+
+```bash
+COMPOSER_ROOT_VERSION=1.0.0 composer config version 1.0.0
+```
+
+This warning concerns the WordPress root package, not `.test-tools` or PHPUnit.
 
 ### Command exists in only one directory
 
