@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 use WpTest\IntegrationTestCase;
 
+/**
+ * @group harness-fixture
+ */
 final class IntegrationHelpersTest extends IntegrationTestCase
 {
 	private const PLUGIN = 'wp-test-lifecycle/wp-test-lifecycle.php';
@@ -54,7 +57,7 @@ final class IntegrationHelpersTest extends IntegrationTestCase
 			$this->activatePlugin(self::PLUGIN);
 		}
 
-		do_action('rest_api_init');
+		do_action('rest_api_init', rest_get_server());
 
 		wp_set_current_user(0);
 
