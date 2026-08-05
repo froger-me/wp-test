@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 use WpTest\IntegrationTestCase;
 
+/**
+ * @group harness-fixture
+ */
 final class FixtureLifecycleTest extends IntegrationTestCase
 {
 	private const PLUGIN = 'wp-test-lifecycle/wp-test-lifecycle.php';
