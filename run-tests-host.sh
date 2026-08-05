@@ -71,13 +71,16 @@ bash "$TOOLKIT_DIR/doctor-host.sh" --quiet
 
 mkdir -p "$RUNTIME_DIR"
 
-ddev wp option get active_plugins --format=json \
+ddev exec --raw env XDEBUG_MODE=off \
+	wp --path=/var/www/html option get active_plugins --format=json \
 	> "$RUNTIME_DIR/working-active-plugins.json"
 
-ddev wp option get stylesheet \
+ddev exec --raw env XDEBUG_MODE=off \
+	wp --path=/var/www/html option get stylesheet \
 	> "$RUNTIME_DIR/working-stylesheet.txt"
 
-ddev wp option get template \
+ddev exec --raw env XDEBUG_MODE=off \
+	wp --path=/var/www/html option get template \
 	> "$RUNTIME_DIR/working-template.txt"
 
 BUILD_ARGS=(--profile="$PROFILE")
@@ -86,11 +89,12 @@ if [[ -n "$TARGET" ]]; then
 	BUILD_ARGS+=(--target="$TARGET")
 fi
 
-ddev exec --raw php \
-	/var/www/html/.test-tools/bin/build-manifest.php \
+ddev exec --raw env XDEBUG_MODE=off \
+	php /var/www/html/.test-tools/bin/build-manifest.php \
 	"${BUILD_ARGS[@]}"
 
 exec ddev exec --raw env \
+	XDEBUG_MODE=off \
 	WP_TEST_COVERAGE="$COVERAGE" \
 	WP_TEST_JUNIT="$JUNIT" \
 	WP_TEST_INCLUDE_DESTRUCTIVE="$INCLUDE_DESTRUCTIVE" \
