@@ -4,6 +4,7 @@
  *
  * @package AnyapeWPTestTools
  */
+
 declare(strict_types=1);
 
 // phpcs:disable WordPress.WP.AlternativeFunctions -- This standalone host command runs before WordPress is loaded.
