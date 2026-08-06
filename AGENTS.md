@@ -10,7 +10,7 @@ The goal is a lightweight, deterministic local test and development utility surf
 
 1. PHPUnit uses only database `anyape_wp_test_tools` with prefix `anyape_wptt_`. Never run destructive tests against working database `db`.
 2. External services are blocked by default. Add explicit mocks or separately named opt-in integration commands; never weaken the default block to make a test pass.
-3. Routine commands must not call DDEV start, stop, restart, rebuild, or configuration commands. Environment lifecycle remains explicit. The guided `composer setup` command may configure and start DDEV because that is its stated purpose and every lasting change is reported or confirmed. The destructive `composer anyape-wp-test-tools:uninstall` command may delete only the current associated DDEV project after its exact confirmation. `composer test:e2e` may call DDEV's database snapshot and restore commands; DDEV may recreate service containers internally while restoring a snapshot.
+3. Routine commands must not call DDEV start, stop, restart, rebuild, or configuration commands. Environment lifecycle remains explicit. The guided `composer setup` command may configure and start DDEV because that is its stated purpose and every lasting change is reported or confirmed. The destructive `composer anyape-wp-test-tools:uninstall` command may delete only the current associated DDEV project after its exact confirmation. `composer test:e2e` may export and import database `db`, create and remove its temporary fallback snapshot, and restore that snapshot when SQL restoration fails; DDEV may recreate service containers internally only during snapshot fallback restoration.
 4. Every public Composer command must be available with the same name and behavior from both the consuming WordPress root and the `.anyape-wp-test-tools` directory.
 5. Developers must not need to enter `ddev sh` for normal work. Host wrappers may use `ddev wp` or `ddev exec`, but not lifecycle or configuration commands.
 6. Never add site-specific domains, absolute user paths, SSH aliases, secrets, passwords, API keys, buckets, or service credentials.
@@ -106,11 +106,13 @@ Every browser run follows this sequence:
 
 1. confirm DDEV is running and WordPress uses the same local host name;
 2. save `wp-content/uploads`, `wp-content/mu-plugins`, and configured extra paths;
-3. export and measure working database `db`, then create a temporary DDEV database snapshot;
-4. create dedicated users and repeatable content after the snapshot, then sign them in through a random value valid only during this run rather than the site's normal login form;
+3. export and measure working database `db`, then create a temporary DDEV database snapshot as a fallback;
+4. create dedicated users and repeatable content after the export and snapshot, then sign them in through a random value valid only during this run rather than the site's normal login form;
 5. run Anyape WP Test Tools and selected extension tests in Chromium;
-6. restore the database and saved files from an exit handler without deleting existing top-level protected directories that DDEV may have mounted; and
-7. compare the restored database and files with their saved state.
+6. import the saved SQL export and restore saved files from an exit handler without deleting existing top-level protected directories that DDEV may have mounted;
+7. export and compare the restored database and files with their saved state;
+8. restore and verify the temporary snapshot only when SQL restoration fails or does not match; and
+9. remove the temporary snapshot after a verified database restore, retaining it only when recovery or snapshot cleanup fails.
 
 Extension tests use `wp-content/plugins/<slug>/tests/e2e/**/*.spec.ts` and `wp-content/themes/<slug>/tests/e2e/**/*.spec.ts`. An extension may add `tests/e2e/fixtures.php`; it runs with WordPress fully loaded after the snapshot. The root `.anyape-wp-test-tools.php` file may name `e2e_bootstrap` and extra `e2e_filesystem_paths` below `wp-content`.
 
