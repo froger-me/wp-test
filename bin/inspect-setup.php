@@ -25,23 +25,25 @@ function anyape_wp_test_tools_inspect_setup( string $project_root ): array {
 		}
 	}
 
-	$wp_config_path   = $project_root . '/wp-config.php';
-	$wp_config        = is_file( $wp_config_path ) ? (string) file_get_contents( $wp_config_path ) : '';
-	$wp_config_report = anyape_wp_test_tools_inspect_wp_config( $wp_config );
-	$ddev_path        = $project_root . '/.ddev/config.yaml';
-	$ddev              = is_file( $ddev_path ) ? (string) file_get_contents( $ddev_path ) : '';
-	$ddev_project_name = anyape_wp_test_tools_ddev_scalar( $ddev, 'name' );
-	$ddev_project_type = anyape_wp_test_tools_ddev_scalar( $ddev, 'type' );
-	$ddev_docroot      = anyape_wp_test_tools_ddev_scalar( $ddev, 'docroot' );
-	$ddev_webserver    = anyape_wp_test_tools_ddev_scalar( $ddev, 'webserver_type' );
-	$ddev_packages     = anyape_wp_test_tools_ddev_packages( $ddev );
-	$ddev_ready        =
-		is_file( $ddev_path ) &&
-		is_file( $project_root . '/wp-config-ddev.php' ) &&
-		'wordpress' === $ddev_project_type &&
-		'.' === $ddev_docroot &&
-		'apache-fpm' === $ddev_webserver &&
-		null !== $ddev_project_name;
+	$wp_config_path = $project_root . '/wp-config.php';
+	$wp_config      = is_file( $wp_config_path ) ? (string) file_get_contents( $wp_config_path ) : '';
+	$ddev_path      = $project_root . '/.ddev/config.yaml';
+	$ddev           = is_file( $ddev_path ) ? (string) file_get_contents( $ddev_path ) : '';
+	$packages       = array();
+	if ( preg_match( '/^webimage_extra_packages:\s*\[([^\]]*)\]/m', $ddev, $match ) ) {
+		foreach ( explode( ',', $match[1] ) as $package ) {
+			$package = trim( $package, " \t\n\r\0\x0B'\"" );
+			if ( '' !== $package ) {
+				$packages[] = $package;
+			}
+		}
+	} elseif ( preg_match( '/^webimage_extra_packages:\s*\R((?:[ \t]+-[^\r\n]*\R?)*)/m', $ddev, $match ) ) {
+		if ( preg_match_all( '/^[ \t]+-[ \t]*[\'\"]?([^\'\"\r\n]+)[\'\"]?[ \t]*$/m', $match[1], $package_matches ) ) {
+			foreach ( $package_matches[1] as $package ) {
+				$packages[] = trim( $package );
+			}
+		}
+	}
 
 	$git_mode    = 'none';
 	$git_modules = $project_root . '/.gitmodules';
@@ -54,69 +56,14 @@ function anyape_wp_test_tools_inspect_setup( string $project_root ): array {
 	return array(
 		'wordpress_valid'       => array() === $missing,
 		'missing_paths'         => $missing,
-		'wp_config'             => $wp_config_report,
-		'ddev_ready'            => $ddev_ready,
-		'ddev_project_name'     => $ddev_project_name,
-		'ddev_project_type'     => $ddev_project_type,
-		'ddev_docroot'          => $ddev_docroot,
-		'ddev_webserver_type'   => $ddev_webserver,
-		'ddev_packages'         => $ddev_packages,
-		'subversion_configured' => in_array( 'subversion', $ddev_packages, true ),
+		'wp_config'             => anyape_wp_test_tools_inspect_wp_config( $wp_config ),
+		'ddev_packages'         => $packages,
+		'subversion_configured' => in_array( 'subversion', $packages, true ),
 		'root_composer_exists'  => is_file( $project_root . '/composer.json' ),
 		'root_gitignore_exists' => is_file( $project_root . '/.gitignore' ),
 		'git_mode'              => $git_mode,
 		'sftp_config_exists'    => is_file( $project_root . '/.vscode/sftp.json' ),
 	);
-}
-
-/**
- * Read one top-level scalar from DDEV YAML.
- *
- * @param string $contents DDEV configuration contents.
- * @param string $key      Top-level key.
- * @return string|null
- */
-function anyape_wp_test_tools_ddev_scalar( string $contents, string $key ): ?string {
-	$pattern = '/^' . preg_quote( $key, '/' ) . ':\s*(.*?)\s*(?:#.*)?$/m';
-	if ( 1 !== preg_match( $pattern, $contents, $match ) ) {
-		return null;
-	}
-
-	$value = trim( $match[1] );
-	if ( strlen( $value ) >= 2 ) {
-		$first = $value[0];
-		$last  = $value[ strlen( $value ) - 1 ];
-		if ( ( "'" === $first && "'" === $last ) || ( '"' === $first && '"' === $last ) ) {
-			$value = substr( $value, 1, -1 );
-		}
-	}
-
-	return '' !== $value ? $value : null;
-}
-
-/**
- * Read configured extra DDEV web-image packages.
- *
- * @param string $contents DDEV configuration contents.
- * @return list<string>
- */
-function anyape_wp_test_tools_ddev_packages( string $contents ): array {
-	$packages = array();
-	if ( preg_match( '/^webimage_extra_packages:\s*\[([^\]]*)\]/m', $contents, $match ) ) {
-		foreach ( explode( ',', $match[1] ) as $package ) {
-			$package = trim( $package, " \t\n\r\0\x0B'\"" );
-			if ( '' !== $package ) {
-				$packages[] = $package;
-			}
-		}
-	} elseif ( preg_match( '/^webimage_extra_packages:\s*\R((?:[ \t]+-[^\r\n]*\R?)*)/m', $contents, $match ) ) {
-		if ( preg_match_all( '/^[ \t]+-[\t ]*[\'\"]?([^\'\"\r\n]+)[\'\"]?[ \t]*$/m', $match[1], $package_matches ) ) {
-			foreach ( $package_matches[1] as $package ) {
-				$packages[] = trim( $package );
-			}
-		}
-	}
-	return $packages;
 }
 
 /**
@@ -187,48 +134,13 @@ function anyape_wp_test_tools_inspect_wp_config( string $contents ): array {
 	);
 }
 
-/**
- * Write the setup values in the fixed order consumed by setup-host.sh.
- *
- * @param array<string, mixed> $report Setup inspection report.
- */
-function anyape_wp_test_tools_write_setup_shell_report( array $report ): void {
-	$wp_config = is_array( $report['wp_config'] ?? null ) ? $report['wp_config'] : array();
-	$values    = array(
-		! empty( $report['wordpress_valid'] ) ? '1' : '0',
-		implode( ',', (array) ( $report['missing_paths'] ?? array() ) ),
-		(string) ( $wp_config['status'] ?? '' ),
-		implode( "\n", (array) ( $wp_config['reasons'] ?? array() ) ),
-		! empty( $report['ddev_ready'] ) ? '1' : '0',
-		(string) ( $report['ddev_project_name'] ?? '' ),
-		implode( ',', (array) ( $report['ddev_packages'] ?? array() ) ),
-		! empty( $report['subversion_configured'] ) ? '1' : '0',
-		! empty( $report['root_composer_exists'] ) ? '1' : '0',
-		! empty( $report['root_gitignore_exists'] ) ? '1' : '0',
-		(string) ( $report['git_mode'] ?? '' ),
-		! empty( $report['sftp_config_exists'] ) ? '1' : '0',
-	);
-
-	foreach ( $values as $value ) {
-		fwrite( STDOUT, $value . "\0" );
-	}
-}
-
 if ( realpath( (string) ( $argv[0] ?? '' ) ) === __FILE__ ) {
-	$arguments = array_slice( $argv, 1 );
-	$shell     = in_array( '--shell', $arguments, true );
-	$arguments = array_values( array_diff( $arguments, array( '--shell' ) ) );
-	if ( 1 !== count( $arguments ) ) {
-		fwrite( STDERR, "ERROR: Usage: php inspect-setup.php [--shell] <wordpress-root>\n" );
+	if ( 2 !== $argc ) {
+		fwrite( STDERR, "ERROR: Usage: php inspect-setup.php <wordpress-root>\n" );
 		exit( 1 );
 	}
 	try {
-		$report = anyape_wp_test_tools_inspect_setup( $arguments[0] );
-		if ( $shell ) {
-			anyape_wp_test_tools_write_setup_shell_report( $report );
-		} else {
-			echo json_encode( $report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ), PHP_EOL;
-		}
+		echo json_encode( anyape_wp_test_tools_inspect_setup( $argv[1] ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ), PHP_EOL;
 	} catch ( Throwable $error ) {
 		fwrite( STDERR, 'ERROR: ' . $error->getMessage() . PHP_EOL );
 		exit( 1 );
