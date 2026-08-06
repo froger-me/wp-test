@@ -1,36 +1,30 @@
-# Optimization plan
+# Optimization implementation plan
 
 ## Goal
 
-Reduce maintenance work, repeated code, unnecessary process starts, and unused internal data without changing any public command, safety rule, database target, confirmation requirement, or test selection rule.
+Remove confirmed dead code, repeated file-handling code, repeated setup parsing, an unnecessary manifest scan, and unnecessary PHP process starts without changing public commands or their behavior.
 
-This is a cleanup of a mature project, not a rewrite. The implementation must make the existing behavior easier to maintain while keeping the separate safety checks around the working database, the PHPUnit database, browser-test restoration, remote database copying, setup, and uninstall.
+The implementation must preserve:
 
-## Limits
+- every Composer command and argument;
+- command availability from both the WordPress root and `.anyape-wp-test-tools`;
+- all confirmation requirements;
+- the working database `db`;
+- the PHPUnit database `anyape_wp_test_tools` and prefix `anyape_wptt_`;
+- browser-test database and file restoration;
+- external-request blocking during ordinary tests;
+- setup and uninstall rollback behavior; and
+- current plugin, theme, multisite, destructive, coverage, and browser-test selection rules.
 
-- Keep every public Composer command and its current arguments, output meaning, exit codes, and side effects.
-- Keep commands available from both the WordPress root and `.anyape-wp-test-tools`.
-- Keep `db` as the working database and `anyape_wp_test_tools` with prefix `anyape_wptt_` as the PHPUnit database.
-- Keep external requests blocked during ordinary tests.
-- Do not add services, packages, frameworks, compatibility layers, or GitHub workflow files.
-- Do not combine setup, database copying, browser restoration, and uninstall into one large command. They have different risks and must remain visibly separate.
-- Add at most one new internal source file. Rename an existing shared shell file instead of adding another shell helper.
-- The total non-test line count across the changed source files should decrease.
+## Confirmed audit findings
 
-## Audit findings
+### 1. Guided setup parses the same state repeatedly
 
-### 1. Guided setup reads the same state in several different ways
+`setup-host.sh` creates a report through `bin/inspect-setup.php`, then starts separate PHP processes to read individual report values. It also reparses `.ddev/config.yaml` in two separate inline PHP blocks to read the DDEV project name and decide whether the DDEV configuration is ready.
 
-Files:
+`bin/inspect-setup.php` already reads `.ddev/config.yaml`, so setup currently has more than one implementation of the same DDEV checks.
 
-- `setup-host.sh`
-- `bin/inspect-setup.php`
-
-`setup-host.sh` creates a JSON inspection report, but then repeatedly starts new PHP processes to read individual values from that report. It also reads `.ddev/config.yaml` again through separate inline PHP snippets to determine the project name and whether the required DDEV settings are present.
-
-This creates two definitions of the same DDEV rules and makes a change to those rules likely to require edits in several places. It also starts many short-lived PHP processes during one setup run.
-
-The inspection report currently returns fields that have no consumer:
+The inspection report also contains confirmed unused fields:
 
 - `project_root`;
 - `ddev_config_exists`;
@@ -39,289 +33,626 @@ The inspection report currently returns fields that have no consumer:
 - `project_test_config`; and
 - `db_refresh_config`.
 
-The `$composer_ok` variable and the Composer JSON check in `bin/inspect-setup.php` exist only to produce the unused `root_composer_valid` field.
+The `$composer_ok` calculation exists only to produce the unused `root_composer_valid` field.
 
-### 2. Host commands repeat the same opening work
+### 2. Safe local file operations are duplicated
 
-Files:
+The following files separately implement overlapping versions of JSON reading, dated backup names, temporary files, atomic replacement, permission preservation, and PHP syntax validation:
 
-- `logging-host.sh`
-- `doctor-host.sh`
-- `database-host.sh`
-- `run-tests-host.sh`
-- `run-e2e-host.sh`
-- `run-all-host.sh`
+- `bin/update-wp-config.php`;
+- `bin/update-root-composer.php`;
+- `bin/update-ignore-files.php`; and
+- `bin/uninstall-project.php`.
+
+The following files separately implement recursive removal without following symbolic links:
+
+- `bin/prepare-runtime.php`; and
+- `bin/e2e-filesystem.php`.
+
+`bin/e2e-filesystem.php` also implements exact copying, directory clearing, and repeatable path digests. These operations are general local file operations and do not depend on browser-test policy.
+
+### 3. Confirmed dead internal code remains
+
+The following internal code has no caller:
+
+- `Manifest::to_array()` in `src/Manifest.php`;
+- the unused setup-report fields listed above; and
+- `gitignore_present` and `sftp_present` in the result from `anyape_wp_test_tools_uninstall_project_files()`.
+
+These are not documented public extension interfaces.
+
+### 4. Manifest duplicate handling performs an unnecessary scan
+
+`ManifestBuilder::deduplicate_extensions()` stores whether an extension has already been seen, but scans the full result array again when a later duplicate enables tests. The first result position can be stored and updated directly.
+
+### 5. WordPress test synchronization starts PHP four times for four values
+
+`sync-wordpress-tests.sh` starts PHP once to read the installed WordPress version and three more times to read `test_database`, `database_host`, and `table_prefix` from `config.php`.
+
+One PHP invocation can return all four values without changing behavior.
+
+### 6. Several setup tests check source wording instead of behavior
+
+`tests/SetupFilesTest.php` reads shell scripts as text and checks internal variable names, explanatory sentences, and complete command strings. These checks fail after harmless internal changes even when command behavior and safety order remain correct.
+
+The exact typed uninstall confirmation and destructive action order are public safety requirements and must remain covered. Internal variable names and explanatory prose are not public behavior.
+
+## Concrete architecture
+
+### Command ownership
+
+The existing shell files remain the public command implementations. No public command is moved or renamed.
+
+- `setup-host.sh` continues to own setup questions, confirmations, DDEV configuration, package installation, database choice, and the final report.
+- `database-host.sh` continues to own snapshots, restores, test-database reset, and remote database copying.
+- `run-tests-host.sh` continues to own PHP test profile handling and the container test sequence.
+- `run-e2e-host.sh` continues to own browser-test capture, snapshot, execution, restoration, and verification.
+- `uninstall-host.sh` continues to own exact confirmation, DDEV deletion, shared-file cleanup, and removal of the toolkit directory.
+
+### Setup state
+
+`bin/inspect-setup.php` becomes the only file that reads and interprets setup state from:
+
+- `wp-config.php`;
+- `.ddev/config.yaml`;
+- `wp-config-ddev.php`;
+- `.gitmodules`;
+- `.gitignore`;
+- `.vscode/sftp.json`; and
+- root `composer.json` existence.
+
+It exposes the same inspection through two output forms:
+
+1. default JSON for direct use and tests;
+2. `--shell` output containing alternating zero-byte-terminated names and values for safe Bash loading.
+
+`setup-host.sh` loads the complete inspection once after each refresh and reads values from one Bash associative array. It does not run inline PHP to read the report or parse DDEV YAML.
+
+### Shared local file operations
+
+Create `bin/file-tools.php` as a dependency-free file loaded with `require_once`. It contains only local file operations. It must not contain setup policy, uninstall policy, allowed-root decisions, database decisions, or command output.
+
+Callers keep all policy:
+
+- `bin/update-wp-config.php` keeps backup restoration and final structure checks;
+- `bin/update-ignore-files.php` keeps the private SFTP backup location and permissions;
+- `bin/uninstall-project.php` keeps complete preflight before any write;
+- `bin/prepare-runtime.php` keeps the fixed runtime target;
+- `bin/e2e-filesystem.php` keeps the allowed browser-run directory and protected-path checks.
+
+### Manifest handling
+
+`Manifest` remains the read-only runtime manifest object. Only the unused `to_array()` method is removed.
+
+`ManifestBuilder` keeps the current manifest structure and selection order. Duplicate entries are updated through a stored result index instead of a second scan.
+
+### Tests
+
+Tests continue to use private temporary directories. They may use fake host commands placed first in `PATH`, but they must not call real DDEV lifecycle commands, real SSH, real databases, or external services.
+
+One narrow source-order test remains for uninstall because the final deletion of the toolkit cannot be executed inside the running test suite. All other source-text checks covered by this plan are replaced with output, file-state, exit-status, or recorded-command assertions.
+
+## Files to create
+
+### `bin/file-tools.php`
+
+Create this single dependency-free internal file with these exact functions:
+
+```php
+/** @return array<string, mixed> */
+function anyape_wp_test_tools_read_json_object( string $path ): array;
+
+function anyape_wp_test_tools_unused_backup_path( string $path ): string;
+
+function anyape_wp_test_tools_atomic_write(
+    string $path,
+    string $contents,
+    ?int $permissions = null
+): void;
+
+function anyape_wp_test_tools_assert_php_syntax( string $path ): void;
+
+function anyape_wp_test_tools_remove_path( string $path ): void;
+
+function anyape_wp_test_tools_clear_directory( string $path ): void;
+
+function anyape_wp_test_tools_copy_path(
+    string $source,
+    string $destination
+): void;
+
+function anyape_wp_test_tools_path_digest( string $path ): string;
+```
+
+The function names are fixed by this plan. Do not add a class, namespace, package, framework, or Composer dependency for these operations.
+
+## Files to update
+
+- `bin/inspect-setup.php`
 - `setup-host.sh`
-
-These scripts repeatedly resolve the toolkit and WordPress paths, check required host programs, check whether DDEV is running, parse verbose output options, print the detailed-log explanation, and parse focused plugin or theme targets.
-
-`log-host.sh` and `logging-host.sh` are not duplicates: the first implements the WordPress debug-log command, while the second contains shared detailed-output functions. Their similar names make that distinction unnecessarily difficult to see.
-
-### 3. Safe file replacement is implemented several times
-
-Files:
-
 - `bin/update-wp-config.php`
 - `bin/update-root-composer.php`
 - `bin/update-ignore-files.php`
 - `bin/uninstall-project.php`
-
-These files independently implement parts of the same work:
-
-- read and validate JSON;
-- choose an unused dated backup name;
-- create a temporary file beside the destination;
-- preserve file permissions;
-- write and rename the temporary file;
-- validate generated PHP; and
-- remove temporary files after failure.
-
-The rules around those operations are not identical. In particular, `wp-config.php` must be restored after a failed final check, while the SFTP settings backup must remain private inside the toolkit runtime directory. The shared code must cover only the repeated file mechanics; each command must continue to decide its own backup location, validation, restoration, and error message.
-
-### 4. Recursive file handling is repeated
-
-Files:
-
 - `bin/prepare-runtime.php`
 - `bin/e2e-filesystem.php`
-- `tests/SetupFilesTest.php`
-
-The runtime builder and browser-test restoration code each contain their own directory walking and removal code. Browser tests additionally implement exact copying, top-level directory preservation, symbolic-link handling, and path digests.
-
-The production code should use one implementation for removing a tree without following symbolic links, clearing a directory while keeping the directory itself, exact copying, and repeatable path digests. The browser command must keep its current allowed-directory checks, and the runtime builder must remain restricted to its generated runtime directory.
-
-The test suite may keep an independent small cleanup function for its private temporary directory. Tests should not rely on the same removal function they are meant to verify.
-
-### 5. Proven dead internal code remains
-
-Files:
-
 - `src/Manifest.php`
-- `bin/inspect-setup.php`
-- `bin/uninstall-project.php`
-
-`Manifest::to_array()` has no caller. The unused setup-report fields listed above have no caller. `gitignore_present` and `sftp_present` are returned by `anyape_wp_test_tools_uninstall_project_files()` but are not read by the command or tests.
-
-These are internal values rather than documented extension interfaces and should be removed.
-
-Parameters required by WordPress hooks, such as the existing mail result or parsed HTTP arguments, are not dead merely because the current function body does not read them. Keep required callback signatures intact.
-
-### 6. Manifest duplicate handling scans work that was already done
-
-File:
-
 - `src/ManifestBuilder.php`
-
-`deduplicate_extensions()` records that an extension has already been seen, but then scans the complete result list again to find that extension when test discovery must be enabled. The result position can be recorded when the extension is first added and updated directly later.
-
-This is a small runtime cost with normal plugin counts, but the current implementation is longer and easier to break than a direct lookup.
-
-### 7. Some tests depend on internal variable names and exact script wording
-
-File:
-
-- `tests/SetupFilesTest.php`
-
-Several tests read shell scripts as text and assert internal variable names, exact explanatory sentences, or exact command strings. Examples include the setup DDEV configuration test, the Subversion setup test, the database-pull receipt test, and parts of the uninstall-order test.
-
-These tests create avoidable maintenance work: harmless renaming or clearer wording can fail the suite even when behavior is unchanged. Safety ordering still needs proof, but most checks should run code against temporary project files or fake host commands and assert results, exit status, and recorded command order.
-
-### 8. WordPress test synchronization starts PHP repeatedly for fixed values
-
-File:
-
 - `sync-wordpress-tests.sh`
+- `tests/SetupFilesTest.php`
+- `tests/ManifestTest.php`
 
-The script starts PHP once for the WordPress version and three more times for values from `config.php`. One PHP invocation can return all four values in a safe machine-readable form. This is not a major runtime cost compared with downloading WordPress, but it is unnecessary and repeats parsing code.
+`README.md` and `SETUP.md` are not implementation files for this cleanup because no documented public behavior changes. During final review, verify that neither document names a removed internal method or report field. Do not edit them unless that verification finds an actual inaccurate statement.
 
-### 9. Large command files should be shortened without being split into many new commands
+## Files to delete
 
-Files:
+None.
 
-- `setup-host.sh`
-- `database-host.sh`
-- `run-e2e-host.sh`
-- `bin/doctor.php`
-
-These files are long because they describe real sequences with different failure recovery. Splitting each step into another file would increase the number of places that must be followed during a failure.
-
-Reduce them by removing repeated path checks, report parsing, logging setup, and file operations. Keep the main sequence in each existing command so the order of destructive actions and restoration remains readable in one place.
+No existing command file or test fixture directory is deleted or renamed.
 
 ## Implementation sequence
 
-### Phase 1 — Record current behavior before cleanup
+### Phase 1 — Lock current behavior with focused tests
 
-1. Record the current public Composer command list from `composer.json` and confirm the root-command generator still produces the same names.
-2. Add or tighten tests for current argument handling before moving shared shell code:
-   - valid and invalid test profiles;
-   - missing plugin and theme targets;
-   - `composer test` accepting only `-v` and `--verbose`;
-   - DDEV missing and DDEV stopped errors; and
-   - exit status from PHP and browser test runners.
-3. Keep exact confirmation text tests only where the exact typed phrase is part of the public safety contract.
-4. Do not change implementation behavior in this phase.
+Update `tests/ManifestTest.php` and `tests/SetupFilesTest.php` before changing production code.
 
-Files:
+Add manifest coverage that proves:
 
-- `tests/ManifestTest.php`
-- `tests/SetupFilesTest.php`
-- existing shell-command tests, where present
+- duplicate plugin entries retain the position of the first entry;
+- duplicate theme entries retain the position of the first entry;
+- a later duplicate with `tests_enabled=true` enables tests on the retained entry;
+- a later duplicate transfers its `tests_path` and `bootstrap` values when tests become enabled;
+- focused plugin and theme selection remain unchanged; and
+- harness and multisite values remain unchanged.
 
-### Phase 2 — Make the setup inspection report the only DDEV settings reader
+Add setup-inspection coverage for:
 
-1. Extend `bin/inspect-setup.php` to report only the setup values that are used, including:
-   - whether `.ddev/config.yaml` and `wp-config-ddev.php` together form a ready DDEV setup;
-   - the configured DDEV project name;
-   - project type;
-   - document root;
-   - web server type; and
-   - configured extra web-image packages.
-2. Keep the report free of database credentials, passwords, remote configuration values, and complete file contents.
-3. Remove the unused report fields and the dead Composer validation branch.
-4. Add a machine-readable output mode that Bash can read without executing the output. Use pairs of names and values separated by zero bytes so spaces, punctuation, and line breaks cannot become shell commands.
-5. Change `setup-host.sh` to load all report values into a Bash associative array once after each inspection refresh.
-6. Remove `report_value()`, the repeated report-reading `php -r` calls, `configured_ddev_project_name()`, and the separate DDEV configuration parser.
-7. Keep the existing report refresh after setup creates or changes DDEV settings.
-8. Add setup fixtures for missing, complete, and partially configured DDEV files.
+- missing `.ddev/config.yaml`;
+- missing `wp-config-ddev.php`;
+- a complete supported DDEV configuration;
+- a DDEV configuration with the wrong project type;
+- a DDEV configuration with the wrong document root;
+- a DDEV configuration with the wrong web server type; and
+- existing extra web-image packages with and without `subversion`.
 
-Files:
+Add direct assertions that the JSON inspection report does not contain the six confirmed unused fields.
 
-- `bin/inspect-setup.php`
-- `setup-host.sh`
-- `fixtures/setup/`
-- `tests/SetupFilesTest.php`
+Acceptance criteria for Phase 1:
 
-Completion checks:
+- the new tests pass against the current selection order and current setup fixtures;
+- the new tests fail if duplicate extension order changes;
+- the new tests fail if unsupported DDEV values are reported as ready; and
+- no production file changes in this phase.
 
-- `setup-host.sh` no longer uses inline PHP to read the inspection report or parse `.ddev/config.yaml`.
-- A setup inspection contains no unused top-level fields.
-- `composer setup -- --check` remains read-only.
-- Running setup twice still produces no second file change.
+### Phase 2 — Make setup inspection the only setup-state reader
 
-### Phase 3 — Reuse common host-command work
+Update `bin/inspect-setup.php` to return this exact top-level structure:
 
-1. Rename `logging-host.sh` to `host-common.sh` so its purpose is clear without adding another shell file.
-2. Keep the existing detailed-output functions and add small functions for:
-   - resolving the toolkit and WordPress root from the calling script;
-   - checking required host commands;
-   - checking that DDEV is installed and running;
-   - printing the detailed-log explanation; and
-   - parsing the shared profile and target forms used by PHP and browser tests.
-3. Let each caller provide its allowed profile names and continue to own its runner-specific arguments.
-4. Keep destructive confirmations, database names, snapshot names, restoration functions, and DDEV lifecycle decisions in their current command files.
-5. Use the common functions from the host commands that currently repeat them.
-6. Read the WordPress version and the three test-database settings in `sync-wordpress-tests.sh` through one PHP call.
+```php
+return array(
+    'wordpress_valid'        => array() === $missing,
+    'missing_paths'          => $missing,
+    'wp_config'              => $wp_config_report,
+    'ddev_ready'             => $ddev_ready,
+    'ddev_project_name'      => $ddev_project_name,
+    'ddev_project_type'      => $ddev_project_type,
+    'ddev_docroot'           => $ddev_docroot,
+    'ddev_webserver_type'    => $ddev_webserver_type,
+    'ddev_packages'          => $ddev_packages,
+    'subversion_configured'  => in_array( 'subversion', $ddev_packages, true ),
+    'root_composer_exists'   => is_file( $composer_path ),
+    'root_gitignore_exists'  => is_file( $project_root . '/.gitignore' ),
+    'git_mode'               => $git_mode,
+    'sftp_config_exists'     => is_file( $project_root . '/.vscode/sftp.json' ),
+);
+```
 
-Files:
+Determine `ddev_ready` only when all of these are true:
 
-- `logging-host.sh` renamed to `host-common.sh`
-- `doctor-host.sh`
-- `database-host.sh`
-- `run-tests-host.sh`
-- `run-e2e-host.sh`
-- `run-all-host.sh`
-- `setup-host.sh`
-- `sync-wordpress-tests.sh`
+```php
+$ddev_ready =
+    is_file( $ddev_path ) &&
+    is_file( $project_root . '/wp-config-ddev.php' ) &&
+    'wordpress' === $ddev_project_type &&
+    '.' === $ddev_docroot &&
+    'apache-fpm' === $ddev_webserver_type &&
+    null !== $ddev_project_name;
+```
 
-Completion checks:
+Add `--shell` output. It must flatten the values needed by Bash and write alternating zero-byte-terminated names and values:
 
-- Public shell files remain the command targets in `composer.json`.
-- DDEV is never started by an ordinary test, log, doctor, snapshot, restore, or reset command.
-- PHP and browser test arguments still reach their respective runners unchanged.
-- A failure in a child command still becomes the public command's exit status.
+```php
+foreach ( $shell_values as $name => $value ) {
+    fwrite( STDOUT, $name . "\0" . $value . "\0" );
+}
+```
 
-### Phase 4 — Use one implementation for local file mechanics
+Arrays used by Bash must be converted before output:
 
-1. Add one dependency-free internal PHP file for local file operations. It must work before Composer packages are installed.
-2. Move only repeated mechanics into it:
-   - read a JSON object with a useful path-specific error;
-   - create an unused dated backup path;
-   - write through a temporary file in the destination directory and rename only after writing succeeds;
-   - preserve permissions when requested;
-   - validate PHP syntax; and
-   - remove, clear, copy, and digest directory trees without following symbolic links.
-3. Keep all allowed-root checks in the calling commands.
-4. Keep `wp-config.php` post-write inspection and restoration in `bin/update-wp-config.php`.
-5. Keep the private SFTP backup path and mode in `bin/update-ignore-files.php`.
-6. Keep uninstall's complete preflight before DDEV or project files are deleted.
-7. Replace the duplicate local functions in the four file writers, the runtime builder, and the browser filesystem command.
-8. Do not route the explicit confirmed removals in `uninstall-host.sh` through a general recursive deletion function.
+- `missing_paths` becomes a comma-separated display value;
+- `ddev_packages` becomes a comma-separated value accepted by the existing DDEV command;
+- `wp_config.reasons` becomes newline-separated text for error output;
+- booleans become `1` or `0`.
 
-Files:
+Update `setup-host.sh` to load the inspection through this exact pattern:
 
-- one new internal PHP file under `bin/`
-- `bin/update-wp-config.php`
-- `bin/update-root-composer.php`
-- `bin/update-ignore-files.php`
-- `bin/uninstall-project.php`
-- `bin/prepare-runtime.php`
-- `bin/e2e-filesystem.php`
-- `tests/SetupFilesTest.php`
+```bash
+declare -A SETUP_STATE=()
 
-Completion checks:
+load_setup_state() {
+    SETUP_STATE=()
 
-- There is one production implementation of dated backup naming.
-- There is one production implementation of temporary-file replacement.
-- There is one production implementation of recursive removal, exact copying, and path digest creation.
-- A failed generated `wp-config.php` restores the exact original.
-- Symbolic links are copied or removed as links and are never followed into another directory.
-- Browser restoration still preserves an existing top-level protected directory.
+    local name
+    local value
+    while IFS= read -r -d '' name && IFS= read -r -d '' value; do
+        SETUP_STATE["$name"]="$value"
+    done < <(
+        php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/inspect-setup.php" \
+            --shell \
+            "$PROJECT_ROOT"
+    )
+}
+```
 
-### Phase 5 — Remove dead code and shorten manifest handling
+Replace every current `report_value` access with `SETUP_STATE[...]`.
 
-1. Remove `Manifest::to_array()`.
-2. Remove the unused setup-report fields and their supporting calculations.
-3. Remove `gitignore_present` and `sftp_present` from the uninstall result.
-4. Change `ManifestBuilder::deduplicate_extensions()` to record each result position and update it directly when a duplicate enables tests.
-5. Review private variables and functions in the touched files and remove only those with no internal caller and no required callback signature.
-6. Do not remove public integration-test helpers merely because this repository's own fixtures do not call every helper; plugin and theme tests are expected to use them.
+Remove from `setup-host.sh`:
 
-Files:
+- `REPORT_FILE`;
+- `cleanup_setup_report()` report-file removal;
+- `refresh_setup_report()`;
+- `report_value()`;
+- `configured_ddev_project_name()`;
+- `ddev_configuration_ready()`; and
+- every inline `php -r` command that reads the setup report or `.ddev/config.yaml`.
 
-- `src/Manifest.php`
-- `src/ManifestBuilder.php`
-- `bin/inspect-setup.php`
-- `bin/uninstall-project.php`
-- `tests/ManifestTest.php`
-- `tests/SetupFilesTest.php`
+Keep the existing call sequence by invoking `load_setup_state`:
 
-Completion checks:
+- once before the first WordPress validity check;
+- again immediately after `ddev config`; and
+- again after any setup action whose result is read later from the inspection state.
 
-- Repository search finds no reference to a removed method or report field.
-- Duplicate plugin and theme entries retain the same order and correctly enable tests when any matching entry requests them.
-- Focused plugin, focused theme, parent theme, dependency, exclusion, harness, and multisite manifest tests still pass.
+Critical safety rule:
+
+`composer setup -- --check` must continue to avoid DDEV lifecycle commands, package installation, file writes, and database changes.
+
+Acceptance criteria for Phase 2:
+
+- `setup-host.sh` contains no parser for `.ddev/config.yaml`;
+- `setup-host.sh` contains no temporary JSON report file;
+- `setup-host.sh` contains no inline PHP used to read inspection values;
+- the JSON report contains only the documented top-level fields above;
+- `--shell` output is loaded without `eval` or `source`;
+- values containing spaces cannot become shell commands;
+- `composer setup -- --check` is read-only; and
+- repeated setup still reports completed work without rewriting files.
+
+### Phase 3 — Centralize local file operations
+
+Create `bin/file-tools.php` and update the six callers listed below to load it directly:
+
+```php
+require_once __DIR__ . '/file-tools.php';
+```
+
+For `bin/prepare-runtime.php`, use the same `__DIR__` form.
+
+#### JSON reading
+
+Move the complete JSON-object validation from `bin/update-root-composer.php` into `anyape_wp_test_tools_read_json_object()`.
+
+The function must:
+
+- fail when the path does not exist;
+- use `JSON_THROW_ON_ERROR`;
+- require the decoded value to be an array; and
+- include the exact path in the exception message.
+
+Use it from:
+
+- `bin/update-root-composer.php`;
+- `bin/update-ignore-files.php` for SFTP JSON; and
+- `bin/uninstall-project.php` for Composer and SFTP JSON.
+
+#### Backup names
+
+Move the duplicate dated-name loops into `anyape_wp_test_tools_unused_backup_path()`.
+
+Use the format already used by the project:
+
+```php
+$base = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' );
+```
+
+Append `-1`, `-2`, and later integers until the path is unused.
+
+Use it from:
+
+- `bin/update-wp-config.php`;
+- `bin/update-root-composer.php`; and
+- `bin/update-ignore-files.php`.
+
+The SFTP writer still passes its private runtime backup path as the input path and still applies mode `0600` after writing the backup.
+
+#### Atomic replacement
+
+Implement `anyape_wp_test_tools_atomic_write()` with a temporary file in the destination directory:
+
+```php
+$temp = tempnam( dirname( $path ), '.anyape-wp-test-tools-' );
+
+try {
+    if ( false === $temp || false === file_put_contents( $temp, $contents ) ) {
+        throw new RuntimeException( 'Could not write temporary file for: ' . $path );
+    }
+
+    if ( null !== $permissions && ! chmod( $temp, $permissions ) ) {
+        throw new RuntimeException( 'Could not preserve permissions for: ' . $path );
+    }
+
+    if ( ! rename( $temp, $path ) ) {
+        throw new RuntimeException( 'Could not replace file safely: ' . $path );
+    }
+
+    $temp = null;
+} finally {
+    if ( is_string( $temp ) && file_exists( $temp ) ) {
+        unlink( $temp );
+    }
+}
+```
+
+Callers must pass existing permissions masked with `0777` when permissions must be preserved.
+
+Use it from:
+
+- `bin/update-wp-config.php`;
+- `bin/update-root-composer.php`;
+- `bin/update-ignore-files.php`; and
+- `bin/uninstall-project.php`.
+
+`bin/update-wp-config.php` must keep this caller-owned sequence:
+
+1. create backup;
+2. validate proposed PHP through a temporary file;
+3. atomically replace the destination;
+4. validate the replaced file;
+5. inspect the replaced structure;
+6. restore the backup on any failure after the backup is created.
+
+#### PHP syntax validation
+
+Move the repeated `PHP_BINARY -l` command into `anyape_wp_test_tools_assert_php_syntax()` and use it from:
+
+- `bin/update-wp-config.php`; and
+- `bin/uninstall-project.php`.
+
+The exception must include the syntax-check output.
+
+#### Directory operations
+
+Move the production implementations into `bin/file-tools.php`.
+
+`anyape_wp_test_tools_remove_path()` must check symbolic links before directories:
+
+```php
+if ( is_link( $path ) || is_file( $path ) ) {
+    if ( ! unlink( $path ) ) {
+        throw new RuntimeException( 'Could not remove file: ' . $path );
+    }
+    return;
+}
+```
+
+It must recurse only through real directories and must never follow a symbolic link.
+
+`anyape_wp_test_tools_clear_directory()` must remove children while preserving the supplied directory.
+
+`anyape_wp_test_tools_copy_path()` must:
+
+- recreate symbolic links as symbolic links;
+- copy files without changing their contents;
+- preserve file and directory permission bits;
+- create parent directories as needed; and
+- recurse only through real directories.
+
+`anyape_wp_test_tools_path_digest()` must keep the existing browser-test digest rules for missing paths, directories, files, symbolic links, relative paths, and SHA-256 file hashes.
+
+Use these functions from:
+
+- `bin/prepare-runtime.php`; and
+- `bin/e2e-filesystem.php`.
+
+Keep these checks in their existing callers:
+
+- `bin/prepare-runtime.php` may remove only `runtime/wp-content`;
+- `bin/e2e-filesystem.php` may operate only inside `runtime/e2e-runs` and only on configured paths below `wp-content`;
+- browser restore must preserve an existing top-level directory instead of deleting and recreating it; and
+- `uninstall-host.sh` continues to use its explicit confirmed removal commands.
+
+Acceptance criteria for Phase 3:
+
+- repository search finds one production implementation of dated backup naming;
+- repository search finds one production implementation of atomic replacement;
+- repository search finds one production implementation of PHP syntax validation;
+- repository search finds one production implementation of recursive removal, exact copying, directory clearing, and path digest creation;
+- invalid generated `wp-config.php` restores the exact original contents;
+- SFTP backups remain under `runtime/setup-backups` with mode `0600`;
+- symbolic links are copied or removed as links and never followed; and
+- browser restoration still preserves top-level protected directories.
+
+### Phase 4 — Remove dead internal code and direct-update manifest duplicates
+
+Update `src/Manifest.php` and remove this complete method:
+
+```php
+public function to_array(): array {
+    return $this->data;
+}
+```
+
+Update `bin/inspect-setup.php` by removing the six unused fields and every calculation used only by those fields.
+
+Update `bin/uninstall-project.php` so `anyape_wp_test_tools_uninstall_project_files()` returns only:
+
+```php
+return array(
+    'wp_config_restored'    => true,
+    'root_composer_removed' => $remove_root_composer,
+);
+```
+
+Update `ManifestBuilder::deduplicate_extensions()` to store result positions:
+
+```php
+private function deduplicate_extensions( array $extensions ): array {
+    $result    = array();
+    $positions = array();
+
+    foreach ( $extensions as $extension ) {
+        $key = (string) $extension['type'] . ':' . (string) $extension['slug'];
+
+        if ( isset( $positions[ $key ] ) ) {
+            $index = $positions[ $key ];
+
+            if ( ! empty( $extension['tests_enabled'] ) ) {
+                $result[ $index ]['tests_enabled'] = true;
+                $result[ $index ]['tests_path']    = $extension['tests_path'];
+                $result[ $index ]['bootstrap']     = $extension['bootstrap'];
+            }
+
+            continue;
+        }
+
+        $positions[ $key ] = count( $result );
+        $result[]          = $extension;
+    }
+
+    return $result;
+}
+```
+
+Do not change extension keys, output order, manifest fields, or selection rules.
+
+Acceptance criteria for Phase 4:
+
+- repository search finds no call to `Manifest::to_array()`;
+- the six removed report fields do not appear in production code or tests;
+- `gitignore_present` and `sftp_present` do not appear in the uninstall result or tests;
+- duplicate extension order remains unchanged; and
+- all manifest profile tests pass.
+
+### Phase 5 — Read synchronization settings through one PHP process
+
+Update `sync-wordpress-tests.sh` so one PHP process returns the installed WordPress version and the three configuration values as zero-byte-terminated values:
+
+```bash
+SETTINGS=()
+while IFS= read -r -d '' value; do
+    SETTINGS+=("$value")
+done < <(
+    php -r '
+        require $argv[1];
+        $config = require $argv[2];
+        foreach (
+            array(
+                $wp_version,
+                $config["test_database"],
+                $config["database_host"],
+                $config["table_prefix"],
+            ) as $value
+        ) {
+            fwrite(STDOUT, (string) $value . "\0");
+        }
+    ' "$ROOT_DIR/wp-includes/version.php" "$CONFIG_FILE"
+)
+
+if ((${#SETTINGS[@]} != 4)); then
+    echo "ERROR: Could not read the WordPress test synchronization settings." >&2
+    exit 1
+fi
+
+WP_VERSION="${SETTINGS[0]}"
+TEST_DATABASE="${SETTINGS[1]}"
+DATABASE_HOST="${SETTINGS[2]}"
+TABLE_PREFIX="${SETTINGS[3]}"
+```
+
+Keep all current prerelease checks, synchronization checks, download addresses, extraction steps, Subversion exports, generated configuration, and state-file behavior.
+
+Acceptance criteria for Phase 5:
+
+- `sync-wordpress-tests.sh` contains one PHP invocation before synchronization begins;
+- the four values are validated before any download or removal;
+- a missing or malformed value fails before `rm -rf "$CORE_DIR" "$TESTS_DIR"`; and
+- a synchronized matching version still exits without downloading files.
 
 ### Phase 6 — Replace fragile source-text tests
 
-1. Replace assertions about internal variable names and explanatory wording with tests of returned data, exit status, written files, and recorded command order.
-2. Run shell commands against private temporary project copies with fake `ddev`, `npm`, `node`, `ssh`, or other host commands where needed. Each fake command should record its arguments and make no real system or database change.
-3. Test setup inspection and `--check` behavior through fixtures rather than by searching `setup-host.sh` for variable names.
-4. Test uninstall preflight and action order in a disposable copied project. The fake DDEV command must prove that shared-file validation occurs before deletion and that the toolkit directory is removed last.
-5. If a destructive order cannot be exercised safely, retain one narrow source-order assertion for the two command calls involved. Do not assert unrelated prose or internal variable names.
-6. Keep tests independent from the production recursive cleanup function when deleting their own temporary directories.
+Update `tests/SetupFilesTest.php`.
 
-Files:
+Remove assertions that depend on:
 
-- `tests/SetupFilesTest.php`
-- existing command tests
-- `fixtures/setup/`
+- internal shell variable names;
+- exact explanatory sentences;
+- the complete text of non-public command descriptions; and
+- implementation-specific formatting of a command line.
 
-Completion checks:
+Replace them with these tests:
 
-- No test fails solely because an internal shell variable was renamed.
-- Exact user-facing wording is asserted only for typed confirmations or messages that documentation tells users to rely on.
-- Safety order remains covered before the old source-text assertions are removed.
+1. **Setup check is read-only**
+   - copy a complete setup fixture into the private temporary project;
+   - create fake `php`, `ddev`, `composer`, `node`, `npm`, and `git` commands only where the real command must not be called;
+   - run `setup-host.sh --check` against the copied project arrangement;
+   - record every fake command invocation;
+   - assert that no invocation contains `start`, `restart`, `config`, `snapshot`, `restore`, `mysql`, `import-db`, package installation, or a file-writing command.
 
-### Phase 7 — Final review and documentation check
+2. **Setup inspection controls DDEV readiness**
+   - call `anyape_wp_test_tools_inspect_setup()` for each DDEV fixture;
+   - assert `ddev_ready`, project name, project type, document root, web server type, package list, and Subversion state.
 
-1. Compare every public command from the WordPress root and `.anyape-wp-test-tools`.
-2. Confirm that the cleanup did not introduce another configuration file, another public command, or another package installation step.
-3. Update `README.md` or `SETUP.md` only if a documented behavior or internal filename mentioned by those documents changed. Do not add documentation for implementation details that users do not need.
-4. Replace this plan with a short completion record or remove completed sections after implementation, so `PLAN.md` does not again become a history of finished phases.
+3. **Database-pull receipt matching remains exact**
+   - move receipt comparison into a small PHP function inside `bin/database-refresh-config.php` only if it is currently impossible to test without running the host command;
+   - otherwise run `database-host.sh pull --yes` with fake `ddev`, `ssh`, and `gzip` commands and an existing receipt;
+   - assert that an exact receipt prevents the fake SSH command from running;
+   - assert that any changed source, path, remote URL, local URL, or current site URL causes the fake SSH path to be reached.
+
+4. **Uninstall order remains protected**
+   - retain one narrow source-order test proving that `bin/uninstall-project.php --check` occurs before `ddev delete`;
+   - retain one narrow source-order test proving that shared-file cleanup occurs before `rm -rf -- "$ANYAPE_WP_TEST_TOOLS_DIR"`;
+   - do not assert unrelated prose or variable names.
+
+Do not create a new permanent fake-command fixture directory. Create fake commands inside each test's private temporary directory and remove them in the existing test cleanup.
+
+Acceptance criteria for Phase 6:
+
+- renaming an internal shell variable does not fail a test;
+- changing non-contract explanatory prose does not fail a test;
+- `setup --check` read-only behavior is tested through command execution;
+- database-pull receipt matching is tested through input and output behavior;
+- uninstall preflight and final deletion order remain covered; and
+- test cleanup does not use the production recursive removal function.
+
+### Phase 7 — Cleanup review and validation
+
+Review every changed production file and remove:
+
+- old local helper functions replaced by `bin/file-tools.php`;
+- variables used only by removed report fields or removed return values;
+- obsolete comments describing removed implementations; and
+- unused imports or `require_once` statements.
+
+Do not leave compatibility wrappers for removed private functions.
+
+Verify public command names from `composer.json` before and after implementation. They must be identical.
+
+Verify root command generation by running the existing root Composer merge tests. The generated root commands must remain identical.
+
+Verify documentation. Because no public behavior changes, `README.md` and `SETUP.md` should remain unchanged. Stop and report an inconsistency before implementation completion if a required code change would make either document inaccurate.
 
 ## Required validation
 
-Run at least:
+Run PHP syntax checks on every tracked or untracked, non-ignored PHP file:
 
 ```bash
 (
@@ -331,6 +662,11 @@ Run at least:
       [[ ! -f "$file" ]] || php -l "$file" || exit
     done
 )
+```
+
+Run shell syntax checks on every tracked or untracked, non-ignored shell file:
+
+```bash
 (
   cd .anyape-wp-test-tools
   git ls-files --cached --others --exclude-standard -z -- '*.sh' |
@@ -338,6 +674,11 @@ Run at least:
       [[ ! -f "$file" ]] || bash -n "$file" || exit
     done
 )
+```
+
+Run:
+
+```bash
 python3 -m json.tool .anyape-wp-test-tools/composer.json >/dev/null
 composer lint:wpcs
 composer doctor
@@ -349,37 +690,64 @@ composer test
 (cd .anyape-wp-test-tools && composer test)
 ```
 
-Also run focused checks for every changed command:
+Run the focused profiles because manifest handling changes:
 
 ```bash
-composer setup -- --check
-composer test:plugin -- <fixture-plugin-slug>
-composer test:theme -- <fixture-theme-slug>
+composer test:plugin -- anyape-wp-test-tools-lifecycle
+composer test:theme -- anyape-wp-test-tools-theme
 composer test:multisite
 composer test:destructive
 composer test:junit
+```
+
+Run setup checks from both supported locations:
+
+```bash
+composer setup -- --check
+(cd .anyape-wp-test-tools && composer setup -- --check)
+```
+
+Run uninstall dry-run validation without deleting the project:
+
+```bash
 composer anyape-wp-test-tools:uninstall -- --dry-run
 ```
 
-Manually confirm both logging locations still work:
+## Acceptance criteria
 
-```bash
-composer clear:log
-(cd .anyape-wp-test-tools && composer clear:log)
-```
+The implementation is accepted only when all of these are true:
 
-Start `composer tail:log` from both supported directories, append one line to `wp-content/debug.log`, confirm that it appears immediately, and stop with `Ctrl+C` without stopping DDEV.
+- only the files listed under **Files to create** and **Files to update** changed;
+- no file listed under **Files to delete** exists because that list is empty;
+- all required validation commands pass;
+- every public Composer command name and mapping is unchanged;
+- setup state is parsed only by `bin/inspect-setup.php`;
+- setup shell values are loaded without `eval` or `source`;
+- the six confirmed unused setup fields are removed;
+- `Manifest::to_array()` is removed;
+- unused uninstall result fields are removed;
+- manifest duplicate handling uses stored positions and keeps current output order;
+- one PHP process reads all WordPress synchronization values;
+- local file operations have one production implementation in `bin/file-tools.php`;
+- setup, database, browser-test, and uninstall policy remains in the existing command files;
+- setup check remains read-only;
+- browser restoration still restores and verifies the working database and protected files after success, failure, and interruption;
+- invalid `wp-config.php` generation restores the exact original file;
+- SFTP backups remain private;
+- no symbolic link is followed during removal, copying, or digest creation;
+- no source-text test depends on non-contract prose or internal variable names; and
+- `README.md` and `SETUP.md` remain accurate without changes.
 
-## Final acceptance criteria
+## Exit conditions
 
-- The public command list is unchanged.
-- Safety checks remain independently present at destructive database and file boundaries.
-- Setup uses one definition of DDEV readiness and does not repeatedly start PHP to read individual report values.
-- Repeated host-command checks come from one existing shared shell file with a clearer name.
-- Repeated local file operations come from one new dependency-free PHP file.
-- Proven dead methods, report fields, result fields, and supporting variables are removed.
-- Manifest duplicate handling no longer rescans the completed result list.
-- Tests verify behavior and safety order instead of internal variable names wherever practical.
-- The source file count increases by no more than one, and changed production files contain fewer total lines than before.
-- No public behavior, database name, table prefix, external-request rule, DDEV lifecycle rule, or restoration guarantee changes.
-- No GitHub workflow file is added or modified.
+Implementation is complete only after:
+
+1. every phase is implemented in order;
+2. every phase's acceptance criteria pass before the next phase begins;
+3. all required validation commands pass;
+4. repository search confirms removed private functions and fields have no remaining references;
+5. `git diff --check` reports no whitespace errors;
+6. `git status --short` contains only the files listed in this plan; and
+7. the final diff contains no temporary files, generated reports, compatibility wrappers, commented-out code, or unfinished notes.
+
+Stop implementation and report the inconsistency before making further changes if any required step conflicts with an existing safety rule, public command contract, or another requirement in `AGENTS.md`.
