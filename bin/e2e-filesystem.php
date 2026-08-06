@@ -4,6 +4,7 @@
  *
  * @package AnyapeWPTestTools
  */
+
 declare(strict_types=1);
 
 // phpcs:disable WordPress.WP.AlternativeFunctions -- This standalone CLI script runs before WordPress loads and must copy exact local files.
