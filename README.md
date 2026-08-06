@@ -79,7 +79,7 @@ The test site is rebuilt on every run. Options, posts, users, roles, scheduled t
 
 ### The browser-test run
 
-Browser tests use the working site for the duration of one command. The command creates temporary users and repeatable content only after saving the database. It then restores the saved database and protected files, even when a test fails or the command is interrupted.
+Browser tests use the working site for the duration of one command. The command creates temporary users and repeatable content only after exporting the working database and creating a temporary DDEV snapshot as a fallback. It normally restores the database from the saved SQL export and uses the snapshot only when that restore fails or does not match. Protected files are restored even when a test fails or the command is interrupted.
 
 Other safety rules:
 
@@ -415,17 +415,19 @@ Focused runs load the dependencies needed by the selected extension, but they ad
 1. Reads the running DDEV address and the WordPress site address.
 2. Stops if their host names differ, so it cannot accidentally open a remote site.
 3. Saves `wp-content/uploads`, `wp-content/mu-plugins`, and extra paths listed in `.anyape-wp-test-tools.php`.
-4. Exports the working database, records a comparison value, and creates a temporary DDEV database snapshot.
+4. Exports the working database, records a comparison value, and creates a temporary DDEV database snapshot as a fallback.
 5. Adds a temporary must-use plugin and creates an administrator, editor, post, category, media record, option, and small custom table entry.
 6. Loads plugin, theme, and site-wide `fixtures.php` preparation files.
 7. Creates signed-in browser state for the temporary users through a random value valid only for this run.
 8. Runs Anyape WP Test Tools checks and selected plugin and theme browser tests in Chromium.
-9. Restores the DDEV database snapshot and saved files after success, failure, interruption, or another termination signal.
+9. Imports the saved SQL export and restores the saved files after success, failure, interruption, or another termination signal.
 10. Exports the restored database and compares it with the saved state. It also compares every protected file path.
+11. If SQL restoration fails or does not match, restores the temporary snapshot and verifies the database again.
+12. Removes the temporary snapshot after the database has been restored and verified.
 
-The restore operation keeps existing top-level directories in place while replacing their contents. This matters for directories DDEV has attached to the container, such as uploads.
+The normal SQL restore does not recreate DDEV containers. Snapshot restoration remains the fallback and may recreate the database container. File restoration keeps existing top-level directories in place while replacing their contents, which matters for directories DDEV has attached to the container, such as uploads.
 
-After a successful restore, DDEV removes the temporary snapshot. If restoration fails, the error prints the retained snapshot name and backup directory so they can be recovered manually.
+After a verified database restore, the command removes the temporary snapshot. If restoration fails, it retains the snapshot and backup directory for recovery. If only snapshot cleanup fails, the command exits with an error and prints the exact cleanup command instead of silently leaving the snapshot behind.
 
 Browser tests use temporary administrator and editor accounts. They do not use a developer's account or the site's normal login form.
 
@@ -642,7 +644,7 @@ Important output paths:
 | `.anyape-wp-test-tools/vendor/` | Anyape WP Test Tools PHP packages. |
 | `.anyape-wp-test-tools/node_modules/` | Anyape WP Test Tools Node.js and browser-test packages. |
 
-These paths are ignored by the Anyape WP Test Tools repository. Successful browser tests remove their private working backup after database and file comparison. Failed restoration keeps its backup and prints the path.
+These paths are ignored by the Anyape WP Test Tools repository. Successful browser tests remove their private working backup and temporary snapshot after database and file comparison. Failed restoration keeps the backup directory and retains the snapshot only when it is still needed for recovery or could not be cleaned up.
 
 The working site's `wp-content/debug.log` is not inside `.anyape-wp-test-tools`; it belongs to the WordPress installation.
 
@@ -653,7 +655,8 @@ These rules are checked in code rather than being documentation promises alone:
 - PHP plugin lifecycle helpers refuse any database other than `anyape_wp_test_tools` or any table prefix other than `anyape_wptt_`.
 - The environment check refuses equal working and PHP test database names.
 - Browser tests compare the local DDEV and WordPress host names before opening Chromium.
-- Browser tests create a database snapshot before temporary users, posts, options, tables, or media are added.
+- Browser tests export the working database and create a temporary fallback snapshot before temporary users, posts, options, tables, or media are added.
+- Browser tests import and verify the SQL export first, use the snapshot only when required, and remove the snapshot after a verified restore.
 - Browser tests compare the restored database and protected files with their saved state.
 - The WordPress HTTP blocker runs during PHP tests unless a test has registered an expected reply first.
 - Destructive tests remain excluded unless the destructive command is used.
@@ -770,7 +773,7 @@ Check the logging settings above and confirm that `wp-content` is writable. The 
 
 ### Browser restoration fails
 
-Do not begin another browser run. Use the snapshot name and backup directory printed by the failed command. The database snapshot can be restored with `composer restore -- snapshot-name`; protected files remain in the named backup directory for manual recovery.
+Do not begin another browser run. The printed backup directory contains the saved SQL export and protected files. Use the retained snapshot name when the command reports that snapshot recovery is still required. If the database and files were restored but only snapshot cleanup failed, run the exact `ddev snapshot --cleanup --name ... --yes` command printed by the failure.
 
 ### DDEV file synchronization reports conflicts
 
