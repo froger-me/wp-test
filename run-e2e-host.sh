@@ -151,14 +151,30 @@ mkdir -p "$PROJECT_ROOT/wp-content/mu-plugins"
 cp "$ANYAPE_WP_TEST_TOOLS_DIR/e2e/anyape-wp-test-tools-e2e.php" "$PROJECT_ROOT/wp-content/mu-plugins/anyape-wp-test-tools-e2e.php"
 
 CONTAINER_RUN_DIR="/var/www/html/.anyape-wp-test-tools/runtime/e2e-runs/$RUN_ID"
+CONTAINER_USERS_FILE="$CONTAINER_RUN_DIR/users.json"
 ddev exec --raw env \
 	ANYAPE_WP_TEST_TOOLS_E2E_MANIFEST="$CONTAINER_RUN_DIR/manifest.json" \
-	ANYAPE_WP_TEST_TOOLS_E2E_USERS_FILE="$CONTAINER_RUN_DIR/users.json" \
+	ANYAPE_WP_TEST_TOOLS_E2E_USERS_FILE="$CONTAINER_USERS_FILE" \
 	wp --path=/var/www/html eval-file --use-include /var/www/html/.anyape-wp-test-tools/bin/prepare-e2e.php
+
+# DDEV file synchronization may not copy a newly written container file to the
+# host before Playwright starts. Copy the short-lived login token directly.
+HOST_USERS_FILE="$RUN_DIR/users.json"
+HOST_USERS_TEMP="$RUN_DIR/users.json.from-ddev"
+if ! ddev exec --raw cat "$CONTAINER_USERS_FILE" > "$HOST_USERS_TEMP"; then
+	echo "ERROR: Could not copy the temporary browser-test login details from DDEV." >&2
+	exit 1
+fi
+if ! php -r '$data=json_decode((string) file_get_contents($argv[1]),true); exit(is_array($data) && is_string($data["token"] ?? null) && $data["token"] !== "" ? 0 : 1);' "$HOST_USERS_TEMP"; then
+	echo "ERROR: DDEV returned invalid browser-test login details." >&2
+	exit 1
+fi
+chmod 0600 "$HOST_USERS_TEMP"
+mv "$HOST_USERS_TEMP" "$HOST_USERS_FILE"
 
 export ANYAPE_WP_TEST_TOOLS_E2E_BASE_URL="$DDEV_URL"
 export ANYAPE_WP_TEST_TOOLS_E2E_MANIFEST="$RUN_DIR/manifest.json"
-export ANYAPE_WP_TEST_TOOLS_E2E_USERS_FILE="$RUN_DIR/users.json"
+export ANYAPE_WP_TEST_TOOLS_E2E_USERS_FILE="$HOST_USERS_FILE"
 export ANYAPE_WP_TEST_TOOLS_E2E_ADMIN_STATE="$RUN_DIR/admin-state.json"
 export ANYAPE_WP_TEST_TOOLS_E2E_LOWER_STATE="$RUN_DIR/lower-state.json"
 export ANYAPE_WP_TEST_TOOLS_E2E_DEBUG_LOG="$PROJECT_ROOT/wp-content/debug.log"

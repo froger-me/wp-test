@@ -364,24 +364,17 @@ if [[ "$(report_value subversion_configured)" != "1" ]]; then
 	echo "Required: the matching WordPress PHP test files are downloaded from WordPress's development repository with the Subversion program."
 	echo "Subversion is not included in this project's DDEV web container yet. Setup cannot prepare the PHP tests without it."
 	if ((DDEV_WAS_RUNNING)); then
-		echo "Because DDEV is already running, its current web container was built without Subversion. DDEV must rebuild that container and restart the local project after the program is added."
-		SUBVERSION_CONFIRMATION="Add required Subversion support, rebuild the DDEV web container, and restart now?"
+		echo "Because DDEV is already running, its current web container was built without Subversion. Setup will add the program, rebuild that container, and restart the local project automatically."
 	else
-		echo "DDEV is not running. Subversion will be included when the web container is built on the next start, so no separate restart is needed."
-		SUBVERSION_CONFIRMATION="Add required Subversion support before starting DDEV?"
+		echo "DDEV is not running. Setup will add Subversion before building and starting the web container, so no separate restart is needed."
 	fi
 	echo "This changes only the local DDEV environment. It does not change the remote site."
 	echo
-	if confirm_change "$SUBVERSION_CONFIRMATION"; then
-		EXISTING_PACKAGES="$(report_value ddev_packages)"
-		PACKAGES="${EXISTING_PACKAGES:+$EXISTING_PACKAGES,}subversion"
-		anyape_wp_test_tools_run_logged "Adding required Subversion support to the DDEV settings..." ddev config --webimage-extra-packages="$PACKAGES"
-		DDEV_RESTART_NEEDED="$DDEV_WAS_RUNNING"
-		SUBVERSION_SETTINGS_ADDED=1
-	else
-		echo "ERROR: Setup stopped because Subversion is required to download the matching WordPress PHP test library. No PHP test environment was prepared." >&2
-		exit 1
-	fi
+	EXISTING_PACKAGES="$(report_value ddev_packages)"
+	PACKAGES="${EXISTING_PACKAGES:+$EXISTING_PACKAGES,}subversion"
+	anyape_wp_test_tools_run_logged "Adding required Subversion support to the DDEV settings..." ddev config --webimage-extra-packages="$PACKAGES"
+	DDEV_RESTART_NEEDED="$DDEV_WAS_RUNNING"
+	SUBVERSION_SETTINGS_ADDED=1
 else
 	echo "Complete: required Subversion support is already included in the DDEV settings."
 fi
@@ -391,33 +384,21 @@ if ((DDEV_RESTART_NEEDED)); then
 elif ! ddev_project_running; then
 	if ((SUBVERSION_SETTINGS_ADDED)); then
 		echo "The local DDEV project is stopped. Starting it now builds the web container with every configured program, including Subversion."
-		DDEV_START_CONFIRMATION="Build and start the local DDEV project now?"
 		DDEV_START_DESCRIPTION="Building and starting the local DDEV project..."
 	else
 		echo "The local DDEV project is stopped, and its settings already include Subversion."
-		DDEV_START_CONFIRMATION="Start the local DDEV project now?"
 		DDEV_START_DESCRIPTION="Starting the local DDEV project..."
 	fi
 	echo "DDEV must be running to install the test programs and prepare the databases."
 	echo
-	if confirm_change "$DDEV_START_CONFIRMATION"; then
-		anyape_wp_test_tools_run_logged "$DDEV_START_DESCRIPTION" ddev start
-	else
-		echo "ERROR: DDEV must be running to finish setup." >&2
-		exit 1
-	fi
+	anyape_wp_test_tools_run_logged "$DDEV_START_DESCRIPTION" ddev start
 fi
 
 if ! ddev exec --raw svn --version --quiet >/dev/null 2>&1; then
 	echo "Subversion is required and is listed in the DDEV settings, but the running web container does not contain it."
-	echo "The web container must be rebuilt from the updated settings, then the local project must restart."
+	echo "Setup will rebuild the web container from the updated settings and restart the local project automatically."
 	echo
-	if confirm_change "Rebuild the DDEV web container with Subversion and restart now?"; then
-		anyape_wp_test_tools_run_logged "Rebuilding the DDEV web container with Subversion and restarting the project..." ddev restart
-	else
-		echo "ERROR: Setup cannot continue until the DDEV web container includes Subversion." >&2
-		exit 1
-	fi
+	anyape_wp_test_tools_run_logged "Rebuilding the DDEV web container with Subversion and restarting the project..." ddev restart
 fi
 
 if ! ddev exec --raw svn --version --quiet >/dev/null 2>&1; then

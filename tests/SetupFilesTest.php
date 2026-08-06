@@ -233,9 +233,11 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'Required: the matching WordPress PHP test files', $script );
 		$this->assertStringContainsString( 'DDEV_WAS_RUNNING', $script );
 		$this->assertStringContainsString( 'SUBVERSION_SETTINGS_ADDED', $script );
-		$this->assertStringContainsString( 'Subversion will be included when the web container is built on the next start', $script );
+		$this->assertStringContainsString( 'add Subversion before building and starting the web container', $script );
 		$this->assertStringContainsString( 'current web container was built without Subversion', $script );
-		$this->assertStringNotContainsString( 'Add Subversion and rebuild the local DDEV environment?', $script );
+		$this->assertStringNotContainsString( 'SUBVERSION_CONFIRMATION', $script );
+		$this->assertStringNotContainsString( 'Add required Subversion support before starting DDEV?', $script );
+		$this->assertStringNotContainsString( 'Rebuild the DDEV web container with Subversion and restart now?', $script );
 	}
 
 	/** A successful setup database pull is reused if another child requests it. */
@@ -250,6 +252,34 @@ final class SetupFilesTest extends WP_UnitTestCase {
 			strpos( $database_script, 'confirm "pull $SSH_ALIAS"' ),
 			strpos( $database_script, 'if [[ -f "$SETUP_PULL_RECEIPT" ]]' )
 		);
+	}
+
+	/** Browser tests copy their temporary login file from DDEV before Playwright starts. */
+	public function test_browser_login_file_does_not_depend_on_file_synchronization_timing(): void {
+		$script         = (string) file_get_contents( dirname( __DIR__ ) . '/run-e2e-host.sh' );
+		$prepare        = strpos( $script, 'bin/prepare-e2e.php' );
+		$copy_from_ddev = strpos( $script, 'ddev exec --raw cat "$CONTAINER_USERS_FILE"' );
+		$start_browser  = strpos( $script, 'npm --prefix "$ANYAPE_WP_TEST_TOOLS_DIR" run test:e2e' );
+		$validate_token = strpos( $script, 'DDEV returned invalid browser-test login details.' );
+
+		$this->assertNotFalse( $prepare );
+		$this->assertNotFalse( $copy_from_ddev );
+		$this->assertNotFalse( $start_browser );
+		$this->assertNotFalse( $validate_token );
+		$this->assertLessThan( $copy_from_ddev, $prepare );
+		$this->assertLessThan( $start_browser, $copy_from_ddev );
+	}
+
+	/** Failed commands report their plain-text log path only once. */
+	public function test_saved_logs_are_plain_text_and_reported_once(): void {
+		$script = (string) file_get_contents( dirname( __DIR__ ) . '/logging-host.sh' );
+
+		$this->assertStringContainsString( 'anyape_wp_test_tools_strip_terminal_decoration', $script );
+		$this->assertStringContainsString( "tr '\\r' '\\n'", $script );
+		$this->assertStringContainsString( 'tee "$raw_output"', $script );
+		$this->assertStringNotContainsString( 'tee -a "$ANYAPE_WP_TEST_TOOLS_LOG_FILE"', $script );
+		$this->assertStringContainsString( 'ANYAPE_WP_TEST_TOOLS_LOG_REPORTED=1', $script );
+		$this->assertStringContainsString( '"${ANYAPE_WP_TEST_TOOLS_LOG_OWNER:-0}" == "1"', $script );
 	}
 
 	/** A command-name conflict is refused without replacing site work. */

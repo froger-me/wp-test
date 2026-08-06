@@ -143,7 +143,7 @@ The database choices are:
 
 `--yes` never chooses one of these for you. It also does not decide deployment exclusions or create optional configuration files. Add `--run-tests` when the complete PHP and browser run should happen after setup.
 
-Guided setup, `composer test`, and `composer db:pull` keep detailed command output in `.anyape-wp-test-tools/runtime/logs/`. Normal output shows the current stage, whether it completed, and the log path. This keeps repeated plugin notices and long database tables out of the terminal while preserving them for review. Use `composer setup -- -v`, `composer test -- -v`, or `composer db:pull -- -v` to show the details while also saving them. A failed stage always prints the exact log path.
+Guided setup, `composer test`, and `composer db:pull` keep detailed command output in `.anyape-wp-test-tools/runtime/logs/`. Saved logs are plain text: terminal colours and cursor controls are removed. Normal output shows the current stage, whether it completed, and the log path. This keeps repeated plugin notices and long database tables out of the terminal while preserving them for review. Use `composer setup -- -v`, `composer test -- -v`, or `composer db:pull -- -v` to show the details while also saving them. A failed stage always prints the exact log path.
 
 ### Complete uninstall
 

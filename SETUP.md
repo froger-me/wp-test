@@ -29,7 +29,7 @@ It does not choose remote credentials, hosting paths, deployment policy, plugin-
 
 The command is safe to run again. Completed work is reported without rewriting files or rebuilding DDEV.
 
-Subversion is required, not an optional testing feature. On a new or stopped DDEV project, guided setup adds it before DDEV builds and starts the web container. If DDEV is already running without Subversion, setup explains that the existing web container must be rebuilt and the local project restarted before asking for confirmation.
+Subversion is required, not an optional testing feature. Guided setup adds it automatically. On a new or stopped DDEV project, setup adds it before DDEV builds and starts the web container. If DDEV is already running without Subversion, setup automatically rebuilds the web container and restarts the local project with Subversion included.
 
 When `pull` is chosen for the working database, one guided setup run confirms and downloads the remote database only once. If another setup child requests the same pull later in that run, it verifies and reuses the database that was already imported instead of asking again or contacting the remote server again.
 
@@ -117,7 +117,7 @@ composer setup -- --yes --database=keep
 composer setup -- --yes --database=keep --run-tests
 ```
 
-Setup saves detailed command output below `.anyape-wp-test-tools/runtime/logs/` and prints the exact file path. By default, the terminal shows questions, short progress messages, and failures without repeating every plugin notice or database row. Run `composer setup -- -v` to show the full output while also saving it. The complete test and database-copy commands use the same behavior with `composer test -- -v` and `composer db:pull -- -v`.
+Setup saves detailed command output below `.anyape-wp-test-tools/runtime/logs/` and prints the exact file path. Saved logs are plain text without terminal colours or cursor controls. By default, the terminal shows questions, short progress messages, and failures without repeating every plugin notice or database row. Run `composer setup -- -v` to show the full output while also saving it. The complete test and database-copy commands use the same behavior with `composer test -- -v` and `composer db:pull -- -v`.
 
 ## Choose the working database
 
