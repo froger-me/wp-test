@@ -226,6 +226,32 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( "Run 'ddev config", $script );
 	}
 
+	/** Required Subversion setup distinguishes a first start from a running container rebuild. */
+	public function test_subversion_setup_explains_when_a_rebuild_is_needed(): void {
+		$script = (string) file_get_contents( dirname( __DIR__ ) . '/setup-host.sh' );
+
+		$this->assertStringContainsString( 'Required: the matching WordPress PHP test files', $script );
+		$this->assertStringContainsString( 'DDEV_WAS_RUNNING', $script );
+		$this->assertStringContainsString( 'SUBVERSION_SETTINGS_ADDED', $script );
+		$this->assertStringContainsString( 'Subversion will be included when the web container is built on the next start', $script );
+		$this->assertStringContainsString( 'current web container was built without Subversion', $script );
+		$this->assertStringNotContainsString( 'Add Subversion and rebuild the local DDEV environment?', $script );
+	}
+
+	/** A successful setup database pull is reused if another child requests it. */
+	public function test_guided_setup_database_pull_is_recorded_and_reused(): void {
+		$setup_script    = (string) file_get_contents( dirname( __DIR__ ) . '/setup-host.sh' );
+		$database_script = (string) file_get_contents( dirname( __DIR__ ) . '/database-host.sh' );
+
+		$this->assertStringContainsString( 'ANYAPE_WP_TEST_TOOLS_SETUP_RUN_ID', $setup_script );
+		$this->assertStringContainsString( 'setup-pull-receipts', $database_script );
+		$this->assertStringContainsString( 'Reusing that imported database without contacting the remote site again.', $database_script );
+		$this->assertLessThan(
+			strpos( $database_script, 'confirm "pull $SSH_ALIAS"' ),
+			strpos( $database_script, 'if [[ -f "$SETUP_PULL_RECEIPT" ]]' )
+		);
+	}
+
 	/** A command-name conflict is refused without replacing site work. */
 	public function test_root_composer_command_conflict_is_refused(): void {
 		$root     = $this->copy_fixture( 'composer/conflict.json', 'composer.json' );

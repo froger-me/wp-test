@@ -18,7 +18,7 @@ The command handles:
 - the standard DDEV arrangement in `wp-config.php`;
 - local WordPress and PHP error logging;
 - local-file exclusions in Git and supported VS Code SFTP files;
-- the Subversion package needed by the WordPress PHP test library;
+- required Subversion support for downloading the matching WordPress PHP test library;
 - DDEV startup during this one-time setup;
 - PHP packages, Node.js packages, and the Chromium browser;
 - the separate `anyape_wp_test_tools` database;
@@ -28,6 +28,10 @@ The command handles:
 It does not choose remote credentials, hosting paths, deployment policy, plugin-specific test settings, or optional services. Those choices remain in the manual sections below.
 
 The command is safe to run again. Completed work is reported without rewriting files or rebuilding DDEV.
+
+Subversion is required, not an optional testing feature. On a new or stopped DDEV project, guided setup adds it before DDEV builds and starts the web container. If DDEV is already running without Subversion, setup explains that the existing web container must be rebuilt and the local project restarted before asking for confirmation.
+
+When `pull` is chosen for the working database, one guided setup run confirms and downloads the remote database only once. If another setup child requests the same pull later in that run, it verifies and reuses the database that was already imported instead of asking again or contacting the remote server again.
 
 ## Install the required programs
 

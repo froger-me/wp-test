@@ -135,6 +135,31 @@ case "$ACTION" in
 		REMOTE_URL="${CONFIG_VALUES[2]%/}"
 		LOCAL_URL="${CONFIG_VALUES[3]%/}"
 		REMOTE_PATH_SHELL="${CONFIG_VALUES[4]}"
+		SETUP_PULL_RECEIPT=""
+		if [[ -n "${ANYAPE_WP_TEST_TOOLS_SETUP_RUN_ID:-}" ]]; then
+			if [[ ! "$ANYAPE_WP_TEST_TOOLS_SETUP_RUN_ID" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+$ ]]; then
+				echo "ERROR: The guided-setup run identifier is invalid." >&2
+				exit 1
+			fi
+			SETUP_PULL_RECEIPT="$ANYAPE_WP_TEST_TOOLS_DIR/runtime/setup-pull-receipts/$ANYAPE_WP_TEST_TOOLS_SETUP_RUN_ID"
+			if [[ -f "$SETUP_PULL_RECEIPT" ]]; then
+				RECEIPT_VALUES=()
+				while IFS= read -r value; do
+					RECEIPT_VALUES+=("$value")
+				done < "$SETUP_PULL_RECEIPT"
+				CURRENT_SITE_URL="$(ddev wp --path=/var/www/html option get siteurl --skip-plugins --skip-themes 2>/dev/null || true)"
+				if ((${#RECEIPT_VALUES[@]} == 4)) && \
+					[[ "${RECEIPT_VALUES[0]}" == "$SSH_ALIAS" ]] && \
+					[[ "${RECEIPT_VALUES[1]}" == "$REMOTE_PATH" ]] && \
+					[[ "${RECEIPT_VALUES[2]}" == "$REMOTE_URL" ]] && \
+					[[ "${RECEIPT_VALUES[3]}" == "$LOCAL_URL" ]] && \
+					[[ "${CURRENT_SITE_URL%/}" == "$LOCAL_URL" ]]; then
+					echo "Complete: this setup run already copied '$SSH_ALIAS:$REMOTE_PATH' into the local working database. Reusing that imported database without contacting the remote site again."
+					anyape_wp_test_tools_report_log
+					exit 0
+				fi
+			fi
+		fi
 
 		DDEV_URL="$(ddev describe --json-output | php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/e2e-ddev-url.php")"
 		URL_CHECK="$(php -r '
@@ -191,6 +216,13 @@ case "$ACTION" in
 		fi
 		PULL_CHANGED=0
 		trap - EXIT
+		if [[ -n "$SETUP_PULL_RECEIPT" ]]; then
+			umask 077
+			mkdir -p "$(dirname "$SETUP_PULL_RECEIPT")"
+			SETUP_PULL_RECEIPT_TEMP="$SETUP_PULL_RECEIPT.tmp.$$"
+			printf '%s\n' "$SSH_ALIAS" "$REMOTE_PATH" "$REMOTE_URL" "$LOCAL_URL" > "$SETUP_PULL_RECEIPT_TEMP"
+			mv "$SETUP_PULL_RECEIPT_TEMP" "$SETUP_PULL_RECEIPT"
+		fi
 		echo "Refreshed local database 'db'. Automatic snapshot: '$SNAPSHOT_NAME'."
 		;;
 	*)
