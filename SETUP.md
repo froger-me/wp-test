@@ -262,7 +262,13 @@ This is a one-time DDEV image configuration. Routine commands do not rebuild the
 ```bash
 git clone https://github.com/froger-me/wp-test.git .test-tools
 ddev exec --dir=/var/www/html/.test-tools composer install
+cd .test-tools
+npm install
+npx playwright install chromium
+cd ..
 ```
+
+The browser tests use Node.js and Chromium on the host. `node`, `npm`, and `npx` must therefore be available on the host command path. Node packages remain inside `.test-tools/node_modules`.
 
 The cloned `.test-tools/composer.json` already exposes every toolkit command. No root Composer configuration is required when commands will only be run from inside `.test-tools`.
 
@@ -271,6 +277,8 @@ Ensure the executable shell entry points remain executable:
 ```bash
 chmod +x \
   .test-tools/run-tests-host.sh \
+  .test-tools/run-e2e-host.sh \
+  .test-tools/run-all-host.sh \
   .test-tools/sync-wordpress-tests.sh
 ```
 
@@ -294,14 +302,16 @@ To use the same commands without changing into `.test-tools`, create or merge th
         "format:wpcs": "bash .test-tools/run-wpcs.sh fix",
         "tail:log": "bash .test-tools/log-host.sh tail",
         "clear:log": "bash .test-tools/log-host.sh clear",
-        "test": "bash .test-tools/run-tests-host.sh",
+        "test": "bash .test-tools/run-all-host.sh",
+        "test:php": "bash .test-tools/run-tests-host.sh",
         "test:harness": "bash .test-tools/run-tests-host.sh --profile=harness",
         "test:plugin": "bash .test-tools/run-tests-host.sh --profile=plugin",
         "test:theme": "bash .test-tools/run-tests-host.sh --profile=theme",
         "test:multisite": "bash .test-tools/run-tests-host.sh --profile=multisite",
         "test:destructive": "bash .test-tools/run-tests-host.sh --include-destructive --group destructive",
         "test:coverage": "bash .test-tools/run-tests-host.sh --coverage",
-        "test:junit": "bash .test-tools/run-tests-host.sh --junit"
+        "test:junit": "bash .test-tools/run-tests-host.sh --junit",
+        "test:e2e": "bash .test-tools/run-e2e-host.sh"
     }
 }
 ```
@@ -357,7 +367,15 @@ Every public PHPUnit command uses this same Doctor implementation, including def
 
 `composer test:harness` additionally proves lifecycle activation, custom tables, options, roles, cron, REST authorization, uploads, mail capture, HTTP isolation, extension discovery, and helper cleanup using toolkit fixture extensions.
 
-## 12. Run the working-site integration profile
+Check the browser surface after installing Chromium:
+
+```bash
+composer test:e2e
+```
+
+This command requires DDEV to be running already and refuses a WordPress address whose host name differs from DDEV's local address. It creates a temporary database snapshot and saves `wp-content/uploads` and `wp-content/mu-plugins`. After the run, including a failed or interrupted run, it restores and compares the database and saved file paths. It does not use a developer's WordPress account.
+
+## 12. Run all default tests
 
 From either supported directory:
 
@@ -365,15 +383,24 @@ From either supported directory:
 composer test
 ```
 
-The command reads the working site's active ordinary plugins, active theme, and parent theme. It does not modify the working site's active-plugin option.
+This runs the default PHP integration tests first and the Playwright browser tests second. It does not accept runner-specific options. Use the commands below when only one test surface is needed:
+
+```bash
+composer test:php
+composer test:e2e
+```
+
+The PHP-only command reads the working site's active ordinary plugins, active theme, and parent theme. It does not modify the working site's active-plugin option.
 
 Conventional extension paths are discovered automatically:
 
 ```text
 wp-content/plugins/<slug>/tests/phpunit/**/*Test.php
+wp-content/plugins/<slug>/tests/phpunit/**/test-*.php
 wp-content/plugins/<slug>/tests/phpunit/bootstrap.php
 
 wp-content/themes/<slug>/tests/phpunit/**/*Test.php
+wp-content/themes/<slug>/tests/phpunit/**/test-*.php
 wp-content/themes/<slug>/tests/phpunit/bootstrap.php
 ```
 
@@ -430,8 +457,48 @@ Pass PHPUnit options after the slug where applicable:
 
 ```bash
 composer test:plugin -- my-plugin --filter UpgradeTest
-composer test -- --group rest
+composer test:php -- --group rest
 ```
+
+Focused browser runs use the same extension selection rules:
+
+```bash
+composer test:e2e -- --profile=plugin my-plugin
+composer test:e2e -- --profile=theme my-theme
+composer test:e2e -- --grep "settings"
+```
+
+Add extension browser tests and optional repeatable data setup at:
+
+```text
+wp-content/plugins/<slug>/tests/e2e/**/*.spec.ts
+wp-content/plugins/<slug>/tests/e2e/fixtures.php
+wp-content/themes/<slug>/tests/e2e/**/*.spec.ts
+wp-content/themes/<slug>/tests/e2e/fixtures.php
+```
+
+The PHP setup file runs with WordPress fully loaded after the database snapshot. Import the toolkit Playwright wrapper from a conventional extension test file to record browser messages and failed requests:
+
+```ts
+import { test, expect, lowerCapabilityStorageState } from '../../../../../.test-tools/e2e/test';
+```
+
+The default user is the temporary administrator. Use `test.use({ storageState: lowerCapabilityStorageState })` for the temporary editor.
+
+The temporary must-use plugin defines `WP_TEST_E2E`. Plugins should check it to replace CAPTCHA, payments, object storage, webhooks, and update checks with local behavior. Outgoing WordPress HTTP calls are blocked unless they target the local site, a loopback address, or Mailpit. Mailpit receives email. No real service account is used by this command.
+
+Optional `.wp-test.php` browser settings:
+
+```php
+return [
+	'e2e_bootstrap' => 'tests/e2e/site-fixtures.php',
+	'e2e_filesystem_paths' => [
+		'wp-content/plugin-generated-files',
+	],
+];
+```
+
+`e2e_bootstrap` names one site-wide PHP setup file. Each `e2e_filesystem_paths` value must be below `wp-content`; it is saved, restored, and compared with its original contents.
 
 Destructive tests are excluded from all normal runs. Tag uninstall or deliberately destructive tests:
 
@@ -546,13 +613,18 @@ The toolkit ignores:
 .test-tools/.wordpress-test-version
 .test-tools/active-plugins.json
 .test-tools/coverage/
+.test-tools/node_modules/
+.test-tools/playwright-report/
 .test-tools/runtime/
+.test-tools/test-results/
 .test-tools/vendor/
 .test-tools/wordpress/
 .test-tools/wordpress-tests-lib/
 ```
 
-`runtime/` contains the generated manifest, PHPUnit configuration, working-site selection snapshots, isolated upload directory, and linked extension overlay. It is rebuilt for each run.
+`runtime/` contains generated manifests, temporary browser-test backups, PHPUnit configuration, working-site selection records, the isolated upload directory, and linked extension files. Successful browser runs remove their temporary backups. If restoration fails, the error keeps and names the backup for manual recovery.
+
+Failed browser tests retain a trace, screenshot, browser messages, failed requests, test title, selected profile, and WordPress debug-log excerpt in `test-results/`. The readable browser report is in `playwright-report/`.
 
 `wp-content/debug.log` belongs to the consuming WordPress installation. The logging commands may create or truncate that local file but never add it to the toolkit repository.
 
@@ -572,6 +644,7 @@ Update the toolkit from the WordPress root:
 ```bash
 git -C .test-tools pull --ff-only
 ddev exec --dir=/var/www/html/.test-tools composer install
+cd .test-tools && npm install && npx playwright install chromium && cd ..
 composer doctor
 composer test:harness
 composer test

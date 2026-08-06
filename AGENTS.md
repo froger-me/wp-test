@@ -10,7 +10,7 @@ The goal is a lightweight, deterministic local test and development utility surf
 
 1. PHPUnit uses only database `wp_tests` with prefix `wptests_`. Never run destructive tests against working database `db`.
 2. External services are blocked by default. Add explicit mocks or separately named opt-in integration commands; never weaken the default block to make a test pass.
-3. Routine commands must not start, stop, restart, rebuild, or reconfigure DDEV. Environment lifecycle remains explicit.
+3. Routine commands must not call DDEV start, stop, restart, rebuild, or configuration commands. Environment lifecycle remains explicit. `composer test:e2e` may call DDEV's database snapshot and restore commands; DDEV may recreate service containers internally while restoring a snapshot.
 4. Every public Composer command must be available with the same name and behavior from both the consuming WordPress root and the `.test-tools` directory.
 5. Developers must not need to enter `ddev sh` for normal work. Host wrappers may use `ddev wp` or `ddev exec`, but not lifecycle or configuration commands.
 6. Never add site-specific domains, absolute user paths, SSH aliases, secrets, passwords, API keys, buckets, or service credentials.
@@ -58,6 +58,7 @@ composer format:wpcs
 composer tail:log
 composer clear:log
 composer test
+composer test:php
 composer test:harness
 composer test:plugin -- <slug>
 composer test:theme -- <slug>
@@ -65,6 +66,7 @@ composer test:multisite
 composer test:destructive
 composer test:coverage
 composer test:junit
+composer test:e2e
 ```
 
 The toolkit's `composer.json` owns the `.test-tools` command mappings. The consuming root `composer.json` mirrors the same command names for convenience. The shell wrappers are the behavioral source of truth.
@@ -73,6 +75,7 @@ Rules:
 
 - host wrappers must resolve the WordPress root from their own location and must not depend on the caller's current working directory;
 - preserve native PHPUnit argument passthrough from both Composer locations;
+- `composer test` runs the default PHP tests followed by browser tests and rejects runner-specific arguments;
 - keep command names, profiles, exit codes, and side effects identical in both locations;
 - invalid profiles and slugs fail before PHPUnit starts;
 - commands never manage DDEV lifecycle;
@@ -80,7 +83,29 @@ Rules:
 - `composer tail:log` and `composer clear:log` operate only on the local `wp-content/debug.log` after validating local WordPress logging configuration and writability;
 - destructive tests remain excluded unless explicitly requested;
 - coverage remains opt-in;
+- browser tests must reject a WordPress host name that differs from the local DDEV host name;
+- browser tests must restore and compare the working database and protected file paths after success, failure, or interruption;
 - public command changes require README and SETUP updates in the same commit.
+
+## Browser-test architecture
+
+Playwright runs on the host against the address reported by the already-running DDEV project. Node packages remain in `.test-tools/node_modules`.
+
+Every browser run follows this sequence:
+
+1. confirm DDEV is running and WordPress uses the same local host name;
+2. save `wp-content/uploads`, `wp-content/mu-plugins`, and configured extra paths;
+3. export and measure working database `db`, then create a temporary DDEV database snapshot;
+4. create dedicated users and repeatable content after the snapshot, then sign them in through a random value valid only during this run rather than the site's normal login form;
+5. run toolkit and selected extension tests in Chromium;
+6. restore the database and saved files from an exit handler without deleting existing top-level protected directories that DDEV may have mounted; and
+7. compare the restored database and files with their saved state.
+
+Extension tests use `wp-content/plugins/<slug>/tests/e2e/**/*.spec.ts` and `wp-content/themes/<slug>/tests/e2e/**/*.spec.ts`. An extension may add `tests/e2e/fixtures.php`; it runs with WordPress fully loaded after the snapshot. The root `.wp-test.php` file may name `e2e_bootstrap` and extra `e2e_filesystem_paths` below `wp-content`.
+
+The temporary must-use plugin defines `WP_TEST_E2E` and blocks outgoing WordPress HTTP calls except local, loopback, and Mailpit requests. Extensions must replace CAPTCHA, payments, storage, webhooks, and update checks with local behavior when this constant is true. Browser automation must never solve a real CAPTCHA or use real payment or storage credentials.
+
+Failed browser tests retain traces, screenshots, browser messages, failed requests, the test title, selected profile, and a WordPress debug-log excerpt in ignored paths.
 
 ## PHPUnit architecture
 
@@ -105,6 +130,7 @@ Default plugin test paths:
 
 ```text
 wp-content/plugins/<slug>/tests/phpunit/**/*Test.php
+wp-content/plugins/<slug>/tests/phpunit/**/test-*.php
 wp-content/plugins/<slug>/tests/phpunit/bootstrap.php
 ```
 
@@ -112,6 +138,7 @@ Default theme test paths:
 
 ```text
 wp-content/themes/<slug>/tests/phpunit/**/*Test.php
+wp-content/themes/<slug>/tests/phpunit/**/test-*.php
 wp-content/themes/<slug>/tests/phpunit/bootstrap.php
 ```
 
@@ -283,9 +310,11 @@ python3 -m json.tool .test-tools/composer.json >/dev/null
 composer lint:wpcs
 composer doctor
 composer test:harness
-composer test
+composer test:php
 (cd .test-tools && composer doctor)
 (cd .test-tools && composer test:harness)
+composer test
+(cd .test-tools && composer test)
 ```
 
 Run specialist commands when changed:

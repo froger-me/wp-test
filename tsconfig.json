@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "baseUrl": ".",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "strict": true,
+    "paths": {
+      "@playwright/test": ["node_modules/@playwright/test"]
+    },
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "include": [
+    "e2e/**/*.ts",
+    "playwright.config.ts",
+    "../wp-content/plugins/*/tests/e2e/**/*.ts",
+    "../wp-content/themes/*/tests/e2e/**/*.ts"
+  ]
+}

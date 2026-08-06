@@ -21,14 +21,16 @@
         "format:wpcs": "bash run-wpcs.sh fix",
         "tail:log": "bash log-host.sh tail",
         "clear:log": "bash log-host.sh clear",
-        "test": "bash run-tests-host.sh",
+        "test": "bash run-all-host.sh",
+        "test:php": "bash run-tests-host.sh",
         "test:harness": "bash run-tests-host.sh --profile=harness",
         "test:plugin": "bash run-tests-host.sh --profile=plugin",
         "test:theme": "bash run-tests-host.sh --profile=theme",
         "test:multisite": "bash run-tests-host.sh --profile=multisite",
         "test:destructive": "bash run-tests-host.sh --include-destructive --group destructive",
         "test:coverage": "bash run-tests-host.sh --coverage",
-        "test:junit": "bash run-tests-host.sh --junit"
+        "test:junit": "bash run-tests-host.sh --junit",
+        "test:e2e": "bash run-e2e-host.sh"
     },
     "scripts-descriptions": {
         "doctor": "Run the read-only DDEV and PHPUnit safety preflight.",
@@ -36,13 +38,15 @@
         "format:wpcs": "Automatically fix WordPress Coding Standards violations where possible.",
         "tail:log": "Follow the local WordPress debug log inside the running DDEV project.",
         "clear:log": "Safely truncate the local WordPress debug log.",
-        "test": "Run the default WordPress integration profile.",
+        "test": "Run the default PHP tests followed by the browser tests.",
+        "test:php": "Run the default WordPress PHP integration profile.",
         "test:harness": "Run only the toolkit harness tests.",
         "test:plugin": "Run a focused plugin profile; pass the plugin slug after --.",
         "test:theme": "Run a focused theme profile; pass the theme slug after --.",
         "test:multisite": "Run the multisite integration profile.",
         "test:destructive": "Run tests in the destructive PHPUnit group.",
         "test:coverage": "Run tests with opt-in code coverage.",
-        "test:junit": "Run tests and write a JUnit report."
+        "test:junit": "Run tests and write a JUnit report.",
+        "test:e2e": "Run local browser tests and restore the working site afterward."
     }
 }

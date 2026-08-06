@@ -1,0 +1,15 @@
+{
+  "name": "@froger-me/wp-test-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local Playwright tests for WordPress plugins and themes.",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:list": "playwright test --list"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

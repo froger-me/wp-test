@@ -2,7 +2,7 @@
 
 ## Current state
 
-Phases 1 and 2 are implemented.
+Phases 1 through 3 are implemented.
 
 The toolkit now provides:
 
@@ -32,6 +32,7 @@ composer doctor
 composer tail:log
 composer clear:log
 composer test
+composer test:php
 composer test:harness
 composer test:plugin -- <slug>
 composer test:theme -- <slug>
@@ -39,6 +40,7 @@ composer test:multisite
 composer test:destructive
 composer test:coverage
 composer test:junit
+composer test:e2e
 ```
 
 Before beginning another phase, the implemented surfaces should be exercised in the consuming WordPress installation with its actual active extension set. Any defects found there remain stabilization work for the relevant phase.
@@ -65,108 +67,25 @@ ddev logs -s db -f
 
 ---
 
-## Phase 3 — Add a Playwright E2E surface
+## Phase 3 — Playwright browser tests (complete)
 
-### 1. Add repository-managed Node and Playwright dependencies
+Implemented:
 
-Keep Node dependencies inside `.test-tools` and expose Composer commands from the WordPress root.
+- repository-managed Node, TypeScript, Playwright, and Chromium setup;
+- an aggregate `composer test` command, plus direct `composer test:php` and `composer test:e2e` commands, at both supported command locations;
+- refusal to open a WordPress host name that differs from the running DDEV project's local host name;
+- temporary DDEV database snapshots plus saved upload, must-use plugin, and configured file paths;
+- database and file restoration with comparison after success, failure, and interruption;
+- dedicated administrator and editor accounts with reusable signed-in browser state;
+- repeatable post, term, media, option, and custom-table records;
+- active, included, excluded, and focused plugin and theme browser-test selection;
+- conventional extension test and PHP setup-file discovery below `tests/e2e`;
+- a site-wide browser setup file and extra protected paths through `.wp-test.php`;
+- a temporary `WP_TEST_E2E` must-use plugin, local WordPress HTTP boundary, and documented plugin-controlled service replacement rules;
+- traces, screenshots, browser messages, failed requests, test titles, selected profiles, and WordPress debug-log excerpts for failures; and
+- five Chromium checks covering the local site, dedicated login, selected plugins, settings persistence, and a fake service failure.
 
-Candidate commands:
-
-```text
-composer test:e2e
-composer test:e2e -- --grep "settings"
-composer test:all
-```
-
-Use Chromium first. Other browsers remain opt-in.
-
-### 2. Preserve the working site
-
-Playwright will exercise the real local DDEV URL, but must not leave working state altered.
-
-Implement:
-
-1. verify DDEV is already running;
-2. create a temporary DDEV database snapshot;
-3. record relevant filesystem state;
-4. create dedicated E2E users and fixtures;
-5. run Playwright;
-6. restore the database in a trap after success, failure, or interruption;
-7. remove generated uploads and files not restored by the database snapshot; and
-8. verify restoration.
-
-Acceptance criteria:
-
-- dashboard data is identical before and after;
-- failed and interrupted runs restore state;
-- the command never touches a remote site;
-- DDEV lifecycle remains explicit.
-
-### 3. Add authentication and deterministic fixtures
-
-Provide:
-
-- dedicated administrator and lower-capability users;
-- reusable authenticated storage state;
-- deterministic posts, terms, media, options, and custom-table fixtures;
-- plugin-controlled service fakes; and
-- cleanup for uploads and generated files.
-
-Do not depend on a developer's personal account or password.
-
-### 4. Define extension E2E discovery
-
-Proposed paths:
-
-```text
-wp-content/plugins/<slug>/tests/e2e/**/*.spec.ts
-wp-content/themes/<slug>/tests/e2e/**/*.spec.ts
-```
-
-Default selection should follow the PHPUnit profile and `.wp-test.php` rules where practical.
-
-Document every consumed path and optional bootstrap/fixture convention before treating it as stable.
-
-### 5. Isolate external services
-
-Provide test-mode boundaries for:
-
-- CAPTCHA;
-- payments;
-- object storage;
-- email;
-- webhooks;
-- update checks.
-
-CAPTCHA is bypassed through a test verifier, not solved through browser automation. Payment and storage are fake by default. Mail uses Mailpit. Real sandbox integrations require separate explicit commands and ignored credentials.
-
-### 6. Capture useful failure artifacts
-
-On failure retain:
-
-- Playwright trace;
-- screenshot;
-- browser console output;
-- failed network-request summary;
-- relevant WordPress debug-log excerpt;
-- test title;
-- active extension profile.
-
-Keep all artifacts ignored.
-
-### 7. Initial E2E coverage
-
-Harness tests should prove:
-
-- the site opens;
-- a dedicated administrator can log in;
-- selected plugins are visible;
-- a settings form can be saved;
-- a mocked service failure produces expected UI;
-- state is restored afterward.
-
-Phase 3 is complete when active plugins and themes can add conventional Playwright tests and run them safely through `composer test:e2e`.
+Phase 3 is complete. Browser tests run against the local working site and restore its database and protected files before returning.
 
 ---
 
@@ -231,7 +150,5 @@ This remains a final smoke-test layer, not the primary workflow.
 
 ## Recommended next order
 
-1. Stabilize Phases 1 and 2 against the consuming site's real active extensions and local logging configuration.
-2. Add Playwright with database and filesystem restoration.
-3. Add plugin/theme E2E discovery and failure artifacts.
-4. Add optional database-refresh and local-service helpers only when justified.
+1. Stabilize Phases 1 through 3 against the consuming site's real active extensions and local logging configuration.
+2. Add optional database-refresh and local-service helpers only when justified.

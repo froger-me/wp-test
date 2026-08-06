@@ -33,11 +33,25 @@ foreach ( array_merge( $manifest->plugins(), $manifest->themes() ) as $extension
 		$tests_path = $extension['tests_path'] ?? null;
 
 		if ( is_string( $tests_path ) && is_dir( $tests_path ) ) {
-			$suites[] = sprintf(
-				"\t\t<testsuite name=\"%s: %s\">\n\t\t\t<directory suffix=\"Test.php\">%s</directory>\n\t\t</testsuite>",
+			$standard_test_files = array();
+			$iterator            = new RecursiveIteratorIterator(
+				new RecursiveDirectoryIterator( $tests_path, FilesystemIterator::SKIP_DOTS )
+			);
+			foreach ( $iterator as $test_file ) {
+				if ( $test_file->isFile() && str_starts_with( $test_file->getBasename(), 'test-' ) && str_ends_with( $test_file->getBasename(), '.php' ) ) {
+					$standard_test_files[] = "\t\t\t<file>" . $escape( $test_file->getPathname() ) . '</file>';
+				}
+			}
+			sort( $standard_test_files, SORT_STRING );
+			$test_entries = array_merge(
+				array( "\t\t\t<directory suffix=\"Test.php\">" . $escape( $tests_path ) . '</directory>' ),
+				$standard_test_files
+			);
+			$suites[]     = sprintf(
+				"\t\t<testsuite name=\"%s: %s\">\n%s\n\t\t</testsuite>",
 				$escape( ucfirst( (string) $extension['type'] ) ),
 				$escape( (string) $extension['slug'] ),
-				$escape( $tests_path )
+				implode( "\n", $test_entries )
 			);
 		}
 	}
