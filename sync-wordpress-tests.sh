@@ -9,25 +9,38 @@ TESTS_DIR="$ANYAPE_WP_TEST_TOOLS_DIR/wordpress-tests-lib"
 STATE_FILE="$ANYAPE_WP_TEST_TOOLS_DIR/.wordpress-test-version"
 CONFIG_FILE="$ANYAPE_WP_TEST_TOOLS_DIR/config.php"
 
-WP_VERSION="$(
+SETTINGS=()
+while IFS= read -r -d '' value; do
+	SETTINGS+=("$value")
+done < <(
 	php -r '
 		require $argv[1];
-		echo $wp_version;
-	' "$ROOT_DIR/wp-includes/version.php"
-)"
+		$config = require $argv[2];
+		foreach (
+			array(
+				$wp_version,
+				$config["test_database"],
+				$config["database_host"],
+				$config["table_prefix"],
+			) as $value
+		) {
+			fwrite(STDOUT, (string) $value . "\0");
+		}
+	' "$ROOT_DIR/wp-includes/version.php" "$CONFIG_FILE"
+)
 
-TEST_DATABASE="$(
-	php -r '$config = require $argv[1]; echo $config["test_database"];' "$CONFIG_FILE"
-)"
-DATABASE_HOST="$(
-	php -r '$config = require $argv[1]; echo $config["database_host"];' "$CONFIG_FILE"
-)"
-TABLE_PREFIX="$(
-	php -r '$config = require $argv[1]; echo $config["table_prefix"];' "$CONFIG_FILE"
-)"
+if ((${#SETTINGS[@]} != 4)); then
+	echo "ERROR: Could not read the WordPress test synchronization settings." >&2
+	exit 1
+fi
 
-if [[ -z "$WP_VERSION" ]]; then
-	echo "ERROR: Could not determine the installed WordPress version." >&2
+WP_VERSION="${SETTINGS[0]}"
+TEST_DATABASE="${SETTINGS[1]}"
+DATABASE_HOST="${SETTINGS[2]}"
+TABLE_PREFIX="${SETTINGS[3]}"
+
+if [[ -z "$WP_VERSION" || -z "$TEST_DATABASE" || -z "$DATABASE_HOST" || -z "$TABLE_PREFIX" ]]; then
+	echo "ERROR: WordPress test synchronization settings must not be empty." >&2
 	exit 1
 fi
 
