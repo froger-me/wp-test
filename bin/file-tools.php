@@ -11,12 +11,7 @@ declare(strict_types=1);
 // phpcs:disable WordPress.PHP.DiscouragedPHPFunctions -- PHP syntax checks require the host PHP executable.
 // phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Errors preserve exact local paths.
 
-/**
- * Read a JSON object.
- *
- * @param string $path JSON file path.
- * @return array<string, mixed>
- */
+/** Read a JSON object. */
 function anyape_wp_test_tools_read_json_object( string $path ): array {
 	if ( ! is_file( $path ) ) {
 		throw new RuntimeException( 'JSON file does not exist: ' . $path );
@@ -41,19 +36,9 @@ function anyape_wp_test_tools_unused_backup_path( string $path ): string {
 	return $backup;
 }
 
-/**
- * Replace a complete local file atomically.
- *
- * @param string   $path        Destination path.
- * @param string   $contents    Replacement contents.
- * @param int|null $permissions Optional permission bits.
- */
+/** Replace a complete local file atomically. */
 function anyape_wp_test_tools_atomic_write( string $path, string $contents, ?int $permissions = null ): void {
-	$directory = dirname( $path );
-	if ( ! is_dir( $directory ) || ! is_writable( $directory ) ) {
-		throw new RuntimeException( 'Destination directory is not writable: ' . $directory );
-	}
-	$temp = tempnam( $directory, '.anyape-wp-test-tools-' );
+	$temp = tempnam( dirname( $path ), '.anyape-wp-test-tools-' );
 	try {
 		if ( false === $temp || false === file_put_contents( $temp, $contents ) ) {
 			throw new RuntimeException( 'Could not write temporary file for: ' . $path );
