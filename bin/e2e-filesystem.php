@@ -4,11 +4,12 @@
  *
  * @package AnyapeWPTestTools
  */
-
 declare(strict_types=1);
 
 // phpcs:disable WordPress.WP.AlternativeFunctions -- This standalone CLI script runs before WordPress loads and must copy exact local files.
 // phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- CLI exceptions preserve the exact local path that failed.
+
+require_once __DIR__ . '/file-tools.php';
 
 $anyape_wp_test_tools_root = dirname( __DIR__ );
 $project_root              = dirname( $anyape_wp_test_tools_root );
@@ -28,100 +29,6 @@ if ( ! str_starts_with( $normalized_run, str_replace( '\\', '/', $allowed_run_ro
 }
 
 /**
- * Remove one path without following symbolic links.
- *
- * @param string $entry_path Path to remove.
- * @throws RuntimeException When the path cannot be removed.
- */
-function anyape_wp_test_tools_e2e_remove( string $entry_path ): void {
-	if ( is_link( $entry_path ) || is_file( $entry_path ) ) {
-		if ( ! unlink( $entry_path ) ) {
-			throw new RuntimeException( 'Could not remove file: ' . $entry_path );
-		}
-		return;
-	}
-	if ( ! is_dir( $entry_path ) ) {
-		return;
-	}
-	$items = scandir( $entry_path );
-	if ( false === $items ) {
-		throw new RuntimeException( 'Could not read directory: ' . $entry_path );
-	}
-	foreach ( $items as $item ) {
-		if ( '.' !== $item && '..' !== $item ) {
-			anyape_wp_test_tools_e2e_remove( $entry_path . '/' . $item );
-		}
-	}
-	if ( ! rmdir( $entry_path ) ) {
-		throw new RuntimeException( 'Could not remove directory: ' . $entry_path );
-	}
-}
-
-/**
- * Remove a directory's contents while preserving the directory itself.
- *
- * Keeping the top-level directory prevents an active DDEV mount from
- * remaining attached to a deleted directory.
- *
- * @param string $directory_path Directory whose contents should be removed.
- * @throws RuntimeException When the directory cannot be read or cleared.
- */
-function anyape_wp_test_tools_e2e_clear_directory( string $directory_path ): void {
-	$items = scandir( $directory_path );
-	if ( false === $items ) {
-		throw new RuntimeException( 'Could not read directory: ' . $directory_path );
-	}
-	foreach ( $items as $item ) {
-		if ( '.' !== $item && '..' !== $item ) {
-			anyape_wp_test_tools_e2e_remove( $directory_path . '/' . $item );
-		}
-	}
-}
-
-/**
- * Copy one path without following symbolic links.
- *
- * @param string $source      Source path.
- * @param string $destination Destination path.
- * @throws RuntimeException When the path cannot be copied.
- */
-function anyape_wp_test_tools_e2e_copy( string $source, string $destination ): void {
-	if ( is_link( $source ) ) {
-		$target = readlink( $source );
-		if ( false === $target || ! symlink( $target, $destination ) ) {
-			throw new RuntimeException( 'Could not copy symbolic link: ' . $source );
-		}
-		return;
-	}
-	if ( is_file( $source ) ) {
-		$parent = dirname( $destination );
-		if ( ! is_dir( $parent ) && ! mkdir( $parent, 0777, true ) && ! is_dir( $parent ) ) {
-			throw new RuntimeException( 'Could not create directory: ' . $parent );
-		}
-		if ( ! copy( $source, $destination ) ) {
-			throw new RuntimeException( 'Could not copy file: ' . $source );
-		}
-		chmod( $destination, fileperms( $source ) & 0777 );
-		return;
-	}
-	if ( ! is_dir( $source ) ) {
-		throw new RuntimeException( 'Unsupported filesystem entry: ' . $source );
-	}
-	if ( ! is_dir( $destination ) && ! mkdir( $destination, fileperms( $source ) & 0777, true ) && ! is_dir( $destination ) ) {
-		throw new RuntimeException( 'Could not create directory: ' . $destination );
-	}
-	$items = scandir( $source );
-	if ( false === $items ) {
-		throw new RuntimeException( 'Could not read directory: ' . $source );
-	}
-	foreach ( $items as $item ) {
-		if ( '.' !== $item && '..' !== $item ) {
-			anyape_wp_test_tools_e2e_copy( $source . '/' . $item, $destination . '/' . $item );
-		}
-	}
-}
-
-/**
  * Restore one saved path while preserving an existing top-level directory.
  *
  * @param string $backup_path Saved path.
@@ -130,21 +37,25 @@ function anyape_wp_test_tools_e2e_copy( string $source, string $destination ): v
  */
 function anyape_wp_test_tools_e2e_restore( string $backup_path, string $target_path ): void {
 	if ( ! is_dir( $backup_path ) || is_link( $backup_path ) ) {
-		anyape_wp_test_tools_e2e_remove( $target_path );
-		anyape_wp_test_tools_e2e_copy( $backup_path, $target_path );
+		anyape_wp_test_tools_remove_path( $target_path );
+		anyape_wp_test_tools_copy_path( $backup_path, $target_path );
 		return;
 	}
 
 	if ( is_link( $target_path ) || is_file( $target_path ) ) {
-		anyape_wp_test_tools_e2e_remove( $target_path );
+		anyape_wp_test_tools_remove_path( $target_path );
 	}
+	$permissions = fileperms( $backup_path );
+	$mode        = false !== $permissions ? $permissions & 0777 : 0777;
 	if ( ! is_dir( $target_path ) ) {
-		if ( ! mkdir( $target_path, fileperms( $backup_path ) & 0777, true ) && ! is_dir( $target_path ) ) {
+		if ( ! mkdir( $target_path, $mode, true ) && ! is_dir( $target_path ) ) {
 			throw new RuntimeException( 'Could not create directory: ' . $target_path );
 		}
 	} else {
-		anyape_wp_test_tools_e2e_clear_directory( $target_path );
-		chmod( $target_path, fileperms( $backup_path ) & 0777 );
+		anyape_wp_test_tools_clear_directory( $target_path );
+		if ( ! chmod( $target_path, $mode ) ) {
+			throw new RuntimeException( 'Could not preserve directory permissions: ' . $target_path );
+		}
 	}
 
 	$items = scandir( $backup_path );
@@ -153,50 +64,14 @@ function anyape_wp_test_tools_e2e_restore( string $backup_path, string $target_p
 	}
 	foreach ( $items as $item ) {
 		if ( '.' !== $item && '..' !== $item ) {
-			anyape_wp_test_tools_e2e_copy( $backup_path . '/' . $item, $target_path . '/' . $item );
+			anyape_wp_test_tools_copy_path( $backup_path . '/' . $item, $target_path . '/' . $item );
 		}
 	}
 }
 
-/**
- * Return a repeatable digest for one path.
- *
- * @param string $entry_path Path to read.
- * @return string
- */
-function anyape_wp_test_tools_e2e_digest( string $entry_path ): string {
-	$entries = array();
-	$walk    = static function ( string $current, string $relative ) use ( &$walk, &$entries ): void {
-		if ( is_link( $current ) ) {
-			$entries[] = 'l ' . $relative . ' ' . readlink( $current );
-			return;
-		}
-		if ( is_file( $current ) ) {
-			$entries[] = 'f ' . $relative . ' ' . hash_file( 'sha256', $current );
-			return;
-		}
-		if ( ! is_dir( $current ) ) {
-			$entries[] = 'missing ' . $relative;
-			return;
-		}
-		$entries[] = 'd ' . $relative;
-		$items     = scandir( $current );
-		if ( false === $items ) {
-			throw new RuntimeException( 'Could not read directory: ' . $current );
-		}
-		foreach ( $items as $item ) {
-			if ( '.' !== $item && '..' !== $item ) {
-				$walk( $current . '/' . $item, '' === $relative ? $item : $relative . '/' . $item );
-			}
-		}
-	};
-	$walk( $entry_path, '' );
-	return hash( 'sha256', implode( "\n", $entries ) );
-}
-
 try {
 	if ( 'cleanup' === $e2e_action ) {
-		anyape_wp_test_tools_e2e_remove( rtrim( $run_dir, '/' ) );
+		anyape_wp_test_tools_remove_path( rtrim( $run_dir, '/' ) );
 		exit( 0 );
 	}
 
@@ -239,12 +114,12 @@ try {
 			$exists = is_link( $source ) || file_exists( $source );
 			$backup = $backup_dir . '/' . $index;
 			if ( $exists ) {
-				anyape_wp_test_tools_e2e_copy( $source, $backup );
+				anyape_wp_test_tools_copy_path( $source, $backup );
 			}
 			$state[] = array(
 				'path'   => $relative,
 				'exists' => $exists,
-				'digest' => anyape_wp_test_tools_e2e_digest( $source ),
+				'digest' => anyape_wp_test_tools_path_digest( $source ),
 				'backup' => (string) $index,
 			);
 		}
@@ -265,9 +140,9 @@ try {
 		if ( ! empty( $entry['exists'] ) ) {
 			anyape_wp_test_tools_e2e_restore( $backup, $target );
 		} else {
-			anyape_wp_test_tools_e2e_remove( $target );
+			anyape_wp_test_tools_remove_path( $target );
 		}
-		$actual = anyape_wp_test_tools_e2e_digest( $target );
+		$actual = anyape_wp_test_tools_path_digest( $target );
 		if ( ! hash_equals( (string) ( $entry['digest'] ?? '' ), $actual ) ) {
 			throw new RuntimeException( 'Filesystem restoration did not match the saved state: ' . $relative );
 		}
