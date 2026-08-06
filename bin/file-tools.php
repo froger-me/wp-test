@@ -12,82 +12,58 @@ declare(strict_types=1);
 // phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Errors preserve exact local paths.
 
 /**
- * Read a JSON object from a local file.
+ * Read a JSON object.
  *
  * @param string $path JSON file path.
  * @return array<string, mixed>
- * @throws RuntimeException When the file is missing or does not contain an object.
  */
 function anyape_wp_test_tools_read_json_object( string $path ): array {
 	if ( ! is_file( $path ) ) {
 		throw new RuntimeException( 'JSON file does not exist: ' . $path );
 	}
-
 	try {
 		$data = json_decode( (string) file_get_contents( $path ), true, 512, JSON_THROW_ON_ERROR );
 	} catch ( JsonException $error ) {
 		throw new RuntimeException( 'Invalid JSON file ' . $path . ': ' . $error->getMessage(), 0, $error );
 	}
-
 	if ( ! is_array( $data ) ) {
 		throw new RuntimeException( 'JSON file must contain an object: ' . $path );
 	}
-
 	return $data;
 }
 
-/**
- * Return an unused dated backup path.
- *
- * @param string $path Original file path.
- * @return string Unused backup path.
- */
+/** Return an unused dated backup path. */
 function anyape_wp_test_tools_unused_backup_path( string $path ): string {
-	$base   = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' );
-	$backup = $base;
-	$suffix = 1;
-
-	while ( file_exists( $backup ) || is_link( $backup ) ) {
+	$base = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' );
+	for ( $backup = $base, $suffix = 1; file_exists( $backup ) || is_link( $backup ); ++$suffix ) {
 		$backup = $base . '-' . $suffix;
-		++$suffix;
 	}
-
 	return $backup;
 }
 
 /**
- * Replace a complete local file through a temporary file beside it.
+ * Replace a complete local file atomically.
  *
- * @param string   $path        Destination file path.
- * @param string   $contents    Complete replacement contents.
- * @param int|null $permissions Optional permission bits for the replacement.
- * @throws RuntimeException When the file cannot be written or replaced.
+ * @param string   $path        Destination path.
+ * @param string   $contents    Replacement contents.
+ * @param int|null $permissions Optional permission bits.
  */
-function anyape_wp_test_tools_atomic_write(
-	string $path,
-	string $contents,
-	?int $permissions = null
-): void {
+function anyape_wp_test_tools_atomic_write( string $path, string $contents, ?int $permissions = null ): void {
 	$directory = dirname( $path );
 	if ( ! is_dir( $directory ) || ! is_writable( $directory ) ) {
 		throw new RuntimeException( 'Destination directory is not writable: ' . $directory );
 	}
-
 	$temp = tempnam( $directory, '.anyape-wp-test-tools-' );
-
 	try {
 		if ( false === $temp || false === file_put_contents( $temp, $contents ) ) {
 			throw new RuntimeException( 'Could not write temporary file for: ' . $path );
 		}
-
 		if ( null !== $permissions && ! chmod( $temp, $permissions ) ) {
 			throw new RuntimeException( 'Could not preserve permissions for: ' . $path );
 		}
-
 		if ( ! rename( $temp, $path ) ) {
 			throw new RuntimeException( 'Could not replace file safely: ' . $path );
 		}
-
 		$temp = null;
 	} finally {
 		if ( is_string( $temp ) && file_exists( $temp ) ) {
@@ -96,26 +72,15 @@ function anyape_wp_test_tools_atomic_write(
 	}
 }
 
-/**
- * Fail when a PHP file does not pass the host PHP syntax check.
- *
- * @param string $path PHP file path.
- * @throws RuntimeException When PHP reports invalid syntax.
- */
+/** Fail when a PHP file has invalid syntax. */
 function anyape_wp_test_tools_assert_php_syntax( string $path ): void {
-	$command = escapeshellarg( PHP_BINARY ) . ' -l ' . escapeshellarg( $path ) . ' 2>&1';
-	exec( $command, $output, $status );
+	exec( escapeshellarg( PHP_BINARY ) . ' -l ' . escapeshellarg( $path ) . ' 2>&1', $output, $status );
 	if ( 0 !== $status ) {
 		throw new RuntimeException( 'PHP syntax check failed for ' . $path . ': ' . implode( ' ', $output ) );
 	}
 }
 
-/**
- * Remove one path without following symbolic links.
- *
- * @param string $path File, link, or directory path.
- * @throws RuntimeException When the path cannot be removed safely.
- */
+/** Remove one path without following symbolic links. */
 function anyape_wp_test_tools_remove_path( string $path ): void {
 	if ( is_link( $path ) || is_file( $path ) ) {
 		if ( ! unlink( $path ) ) {
@@ -123,43 +88,32 @@ function anyape_wp_test_tools_remove_path( string $path ): void {
 		}
 		return;
 	}
-
 	if ( ! is_dir( $path ) ) {
 		return;
 	}
-
 	$items = scandir( $path );
 	if ( false === $items ) {
 		throw new RuntimeException( 'Could not read directory: ' . $path );
 	}
-
 	foreach ( $items as $item ) {
 		if ( '.' !== $item && '..' !== $item ) {
 			anyape_wp_test_tools_remove_path( $path . '/' . $item );
 		}
 	}
-
 	if ( ! rmdir( $path ) ) {
 		throw new RuntimeException( 'Could not remove directory: ' . $path );
 	}
 }
 
-/**
- * Remove a directory's contents while preserving the directory itself.
- *
- * @param string $path Directory path.
- * @throws RuntimeException When the directory cannot be cleared safely.
- */
+/** Remove a directory's contents while preserving the directory. */
 function anyape_wp_test_tools_clear_directory( string $path ): void {
 	if ( is_link( $path ) || ! is_dir( $path ) ) {
 		throw new RuntimeException( 'Path is not a directory that can be cleared: ' . $path );
 	}
-
 	$items = scandir( $path );
 	if ( false === $items ) {
 		throw new RuntimeException( 'Could not read directory: ' . $path );
 	}
-
 	foreach ( $items as $item ) {
 		if ( '.' !== $item && '..' !== $item ) {
 			anyape_wp_test_tools_remove_path( $path . '/' . $item );
@@ -167,22 +121,12 @@ function anyape_wp_test_tools_clear_directory( string $path ): void {
 	}
 }
 
-/**
- * Copy one path without following symbolic links.
- *
- * @param string $source      Source file, link, or directory.
- * @param string $destination Destination path.
- * @throws RuntimeException When the path cannot be copied safely.
- */
-function anyape_wp_test_tools_copy_path(
-	string $source,
-	string $destination
-): void {
+/** Copy one path without following symbolic links. */
+function anyape_wp_test_tools_copy_path( string $source, string $destination ): void {
 	$parent = dirname( $destination );
 	if ( ! is_dir( $parent ) && ! mkdir( $parent, 0777, true ) && ! is_dir( $parent ) ) {
 		throw new RuntimeException( 'Could not create directory: ' . $parent );
 	}
-
 	if ( is_link( $source ) ) {
 		$target = readlink( $source );
 		if ( false === $target || ! symlink( $target, $destination ) ) {
@@ -190,24 +134,18 @@ function anyape_wp_test_tools_copy_path(
 		}
 		return;
 	}
-
 	if ( is_file( $source ) ) {
-		if ( ! copy( $source, $destination ) ) {
-			throw new RuntimeException( 'Could not copy file: ' . $source );
-		}
 		$permissions = fileperms( $source );
-		if ( false !== $permissions && ! chmod( $destination, $permissions & 0777 ) ) {
-			throw new RuntimeException( 'Could not preserve file permissions: ' . $destination );
+		if ( ! copy( $source, $destination ) || ( false !== $permissions && ! chmod( $destination, $permissions & 0777 ) ) ) {
+			throw new RuntimeException( 'Could not copy file: ' . $source );
 		}
 		return;
 	}
-
 	if ( ! is_dir( $source ) ) {
 		throw new RuntimeException( 'Unsupported filesystem entry: ' . $source );
 	}
-
 	$permissions = fileperms( $source );
-	$mode        = false !== $permissions ? $permissions & 0777 : 0777;
+	$mode        = false === $permissions ? 0777 : $permissions & 0777;
 	if ( is_link( $destination ) || is_file( $destination ) ) {
 		throw new RuntimeException( 'Copy destination is not a directory: ' . $destination );
 	}
@@ -217,7 +155,6 @@ function anyape_wp_test_tools_copy_path(
 	if ( ! chmod( $destination, $mode ) ) {
 		throw new RuntimeException( 'Could not preserve directory permissions: ' . $destination );
 	}
-
 	$items = scandir( $source );
 	if ( false === $items ) {
 		throw new RuntimeException( 'Could not read directory: ' . $source );
@@ -229,13 +166,7 @@ function anyape_wp_test_tools_copy_path(
 	}
 }
 
-/**
- * Return a repeatable SHA-256 digest for one path.
- *
- * @param string $path File, link, directory, or missing path.
- * @return string SHA-256 digest.
- * @throws RuntimeException When a directory cannot be read.
- */
+/** Return a repeatable SHA-256 digest for one path. */
 function anyape_wp_test_tools_path_digest( string $path ): string {
 	$entries = array();
 	$walk    = static function ( string $current, string $relative ) use ( &$walk, &$entries ): void {
@@ -251,7 +182,6 @@ function anyape_wp_test_tools_path_digest( string $path ): string {
 			$entries[] = 'missing ' . $relative;
 			return;
 		}
-
 		$entries[] = 'd ' . $relative;
 		$items     = scandir( $current );
 		if ( false === $items ) {
@@ -262,7 +192,6 @@ function anyape_wp_test_tools_path_digest( string $path ): string {
 				$walk( $current . '/' . $item, '' === $relative ? $item : $relative . '/' . $item );
 			}
 	};
-
 	$walk( $path, '' );
 	return hash( 'sha256', implode( "\n", $entries ) );
 }
