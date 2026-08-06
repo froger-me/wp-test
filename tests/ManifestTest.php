@@ -63,41 +63,11 @@ final class ManifestTest extends IntegrationTestCase {
 		$method = new ReflectionMethod( ManifestBuilder::class, 'deduplicate_extensions' );
 		$method->setAccessible( true );
 		$extensions = array(
-			array(
-				'type'          => 'plugin',
-				'slug'          => 'alpha',
-				'tests_enabled' => false,
-				'tests_path'    => null,
-				'bootstrap'     => null,
-			),
-			array(
-				'type'          => 'theme',
-				'slug'          => 'alpha',
-				'tests_enabled' => false,
-				'tests_path'    => null,
-				'bootstrap'     => null,
-			),
-			array(
-				'type'          => 'plugin',
-				'slug'          => 'alpha',
-				'tests_enabled' => true,
-				'tests_path'    => '/plugin-tests',
-				'bootstrap'     => '/plugin-bootstrap.php',
-			),
-			array(
-				'type'          => 'theme',
-				'slug'          => 'alpha',
-				'tests_enabled' => true,
-				'tests_path'    => '/theme-tests',
-				'bootstrap'     => '/theme-bootstrap.php',
-			),
-			array(
-				'type'          => 'plugin',
-				'slug'          => 'beta',
-				'tests_enabled' => true,
-				'tests_path'    => '/beta-tests',
-				'bootstrap'     => null,
-			),
+			$this->extension_entry( 'plugin', 'alpha' ),
+			$this->extension_entry( 'theme', 'alpha' ),
+			$this->extension_entry( 'plugin', 'alpha', '/plugin-tests', '/plugin-bootstrap.php' ),
+			$this->extension_entry( 'theme', 'alpha', '/theme-tests', '/theme-bootstrap.php' ),
+			$this->extension_entry( 'plugin', 'beta', '/beta-tests' ),
 		);
 
 		$result = $method->invoke( new ManifestBuilder( '/project', '/tool' ), $extensions );
@@ -111,5 +81,21 @@ final class ManifestTest extends IntegrationTestCase {
 		$this->assertSame( '/plugin-bootstrap.php', $result[0]['bootstrap'] );
 		$this->assertSame( '/theme-tests', $result[1]['tests_path'] );
 		$this->assertSame( '/theme-bootstrap.php', $result[1]['bootstrap'] );
+	}
+
+	/** Build one duplicate-handling fixture entry. */
+	private function extension_entry(
+		string $type,
+		string $slug,
+		?string $tests_path = null,
+		?string $bootstrap = null
+	): array {
+		return array(
+			'type'          => $type,
+			'slug'          => $slug,
+			'tests_enabled' => null !== $tests_path,
+			'tests_path'    => $tests_path,
+			'bootstrap'     => $bootstrap,
+		);
 	}
 }
