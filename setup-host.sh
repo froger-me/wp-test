@@ -43,107 +43,35 @@ cleanup_setup() {
 }
 trap cleanup_setup EXIT INT TERM HUP
 
-SETUP_WORDPRESS_VALID=""
-SETUP_MISSING_PATHS=""
-SETUP_WP_CONFIG_STATUS=""
-SETUP_WP_CONFIG_REASONS=""
-SETUP_DDEV_READY=""
-SETUP_DDEV_PROJECT_NAME=""
-SETUP_DDEV_PROJECT_TYPE=""
-SETUP_DDEV_DOCROOT=""
-SETUP_DDEV_WEBSERVER_TYPE=""
-SETUP_DDEV_PACKAGES=""
-SETUP_SUBVERSION_CONFIGURED=""
-SETUP_ROOT_COMPOSER_EXISTS=""
-SETUP_ROOT_GITIGNORE_EXISTS=""
-SETUP_GIT_MODE=""
-SETUP_SFTP_CONFIG_EXISTS=""
-
 load_setup_state() {
-	local name
 	local value
-	local missing_field=""
-	local seen_wordpress_valid=0
-	local seen_missing_paths=0
-	local seen_wp_config_status=0
-	local seen_wp_config_reasons=0
-	local seen_ddev_ready=0
-	local seen_ddev_project_name=0
-	local seen_ddev_project_type=0
-	local seen_ddev_docroot=0
-	local seen_ddev_webserver_type=0
-	local seen_ddev_packages=0
-	local seen_subversion_configured=0
-	local seen_root_composer_exists=0
-	local seen_root_gitignore_exists=0
-	local seen_git_mode=0
-	local seen_sftp_config_exists=0
+	local values=()
 
-	SETUP_WORDPRESS_VALID=""
-	SETUP_MISSING_PATHS=""
-	SETUP_WP_CONFIG_STATUS=""
-	SETUP_WP_CONFIG_REASONS=""
-	SETUP_DDEV_READY=""
-	SETUP_DDEV_PROJECT_NAME=""
-	SETUP_DDEV_PROJECT_TYPE=""
-	SETUP_DDEV_DOCROOT=""
-	SETUP_DDEV_WEBSERVER_TYPE=""
-	SETUP_DDEV_PACKAGES=""
-	SETUP_SUBVERSION_CONFIGURED=""
-	SETUP_ROOT_COMPOSER_EXISTS=""
-	SETUP_ROOT_GITIGNORE_EXISTS=""
-	SETUP_GIT_MODE=""
-	SETUP_SFTP_CONFIG_EXISTS=""
-
-	while IFS= read -r -d '' name && IFS= read -r -d '' value; do
-		case "$name" in
-			wordpress_valid) SETUP_WORDPRESS_VALID="$value"; seen_wordpress_valid=1 ;;
-			missing_paths) SETUP_MISSING_PATHS="$value"; seen_missing_paths=1 ;;
-			wp_config_status) SETUP_WP_CONFIG_STATUS="$value"; seen_wp_config_status=1 ;;
-			wp_config_reasons) SETUP_WP_CONFIG_REASONS="$value"; seen_wp_config_reasons=1 ;;
-			ddev_ready) SETUP_DDEV_READY="$value"; seen_ddev_ready=1 ;;
-			ddev_project_name) SETUP_DDEV_PROJECT_NAME="$value"; seen_ddev_project_name=1 ;;
-			ddev_project_type) SETUP_DDEV_PROJECT_TYPE="$value"; seen_ddev_project_type=1 ;;
-			ddev_docroot) SETUP_DDEV_DOCROOT="$value"; seen_ddev_docroot=1 ;;
-			ddev_webserver_type) SETUP_DDEV_WEBSERVER_TYPE="$value"; seen_ddev_webserver_type=1 ;;
-			ddev_packages) SETUP_DDEV_PACKAGES="$value"; seen_ddev_packages=1 ;;
-			subversion_configured) SETUP_SUBVERSION_CONFIGURED="$value"; seen_subversion_configured=1 ;;
-			root_composer_exists) SETUP_ROOT_COMPOSER_EXISTS="$value"; seen_root_composer_exists=1 ;;
-			root_gitignore_exists) SETUP_ROOT_GITIGNORE_EXISTS="$value"; seen_root_gitignore_exists=1 ;;
-			git_mode) SETUP_GIT_MODE="$value"; seen_git_mode=1 ;;
-			sftp_config_exists) SETUP_SFTP_CONFIG_EXISTS="$value"; seen_sftp_config_exists=1 ;;
-			*)
-				echo "ERROR: Unknown setup inspection field '$name'." >&2
-				return 1
-				;;
-		esac
+	while IFS= read -r -d '' value; do
+		values+=("$value")
 	done < <(
 		php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/inspect-setup.php" \
 			--shell \
 			"$PROJECT_ROOT"
 	)
 
-	for missing_field in \
-		"wordpress_valid:$seen_wordpress_valid" \
-		"missing_paths:$seen_missing_paths" \
-		"wp_config_status:$seen_wp_config_status" \
-		"wp_config_reasons:$seen_wp_config_reasons" \
-		"ddev_ready:$seen_ddev_ready" \
-		"ddev_project_name:$seen_ddev_project_name" \
-		"ddev_project_type:$seen_ddev_project_type" \
-		"ddev_docroot:$seen_ddev_docroot" \
-		"ddev_webserver_type:$seen_ddev_webserver_type" \
-		"ddev_packages:$seen_ddev_packages" \
-		"subversion_configured:$seen_subversion_configured" \
-		"root_composer_exists:$seen_root_composer_exists" \
-		"root_gitignore_exists:$seen_root_gitignore_exists" \
-		"git_mode:$seen_git_mode" \
-		"sftp_config_exists:$seen_sftp_config_exists"; do
-		if [[ "${missing_field#*:}" != "1" ]]; then
-			echo "ERROR: Setup inspection did not return required field '${missing_field%%:*}'." >&2
-			return 1
-		fi
-	done
+	if ((${#values[@]} != 12)); then
+		echo "ERROR: Setup inspection returned ${#values[@]} values instead of 12." >&2
+		return 1
+	fi
+
+	SETUP_WORDPRESS_VALID="${values[0]}"
+	SETUP_MISSING_PATHS="${values[1]}"
+	SETUP_WP_CONFIG_STATUS="${values[2]}"
+	SETUP_WP_CONFIG_REASONS="${values[3]}"
+	SETUP_DDEV_READY="${values[4]}"
+	SETUP_DDEV_PROJECT_NAME="${values[5]}"
+	SETUP_DDEV_PACKAGES="${values[6]}"
+	SETUP_SUBVERSION_CONFIGURED="${values[7]}"
+	SETUP_ROOT_COMPOSER_EXISTS="${values[8]}"
+	SETUP_ROOT_GITIGNORE_EXISTS="${values[9]}"
+	SETUP_GIT_MODE="${values[10]}"
+	SETUP_SFTP_CONFIG_EXISTS="${values[11]}"
 }
 
 suggest_ddev_project_name() {
