@@ -1,27 +1,35 @@
 # Setup
 
-This guide configures an existing complete WordPress file tree with DDEV and installs `froger-me/wp-test` as `.test-tools`.
+This guide adds `.test-tools` to an existing WordPress directory served by DDEV.
 
-The intended layout is:
+The normal setup has four actions:
 
-```text
-wordpress-root/
-├── .ddev/
-├── .test-tools/
-├── .wp-test.php                 # optional
-├── composer.json                # root command mirror
-├── wp-admin/
-├── wp-content/
-├── wp-includes/
-├── wp-config.php
-└── wp-config-ddev.php
-```
+1. install the required programs;
+2. create the basic DDEV files;
+3. clone `.test-tools`; and
+4. run the guided setup command.
 
-The existing WordPress files remain the files you edit and deploy. DDEV supplies the local web server, PHP runtime, database, WP-CLI, and containerized test execution.
+The guided command checks the project, explains every lasting change, creates backups before editing, and stops when it cannot make a safe choice. It never asks for or prints remote database passwords.
 
-All toolkit Composer commands work from either the WordPress root or `.test-tools`. The root `composer.json` mirrors the toolkit commands for convenience.
+## What guided setup changes
 
-## 1. Install host prerequisites
+The command handles:
+
+- the standard DDEV arrangement in `wp-config.php`;
+- local WordPress and PHP error logging;
+- local-file exclusions in Git and supported VS Code SFTP files;
+- the Subversion package needed by the WordPress PHP test library;
+- DDEV startup during this one-time setup;
+- PHP packages, Node.js packages, and the Chromium browser;
+- the separate `wp_tests` database;
+- the root `composer.json` command list; and
+- the first environment and toolkit checks.
+
+It does not choose remote credentials, hosting paths, deployment policy, plugin-specific test settings, or optional services. Those choices remain in the manual sections below.
+
+The command is safe to run again. Completed work is reported without rewriting files or rebuilding DDEV.
+
+## Install the required programs
 
 On macOS:
 
@@ -31,19 +39,22 @@ brew install ddev/ddev/ddev
 mkcert -install
 ```
 
-Open Docker Desktop and wait for its engine to run.
+Install current versions of Git, Composer, Node.js, and npm if they are not already available. Open Docker Desktop and wait for it to start.
 
-Verify the host tools:
+Check the programs:
 
 ```bash
 docker info --format 'Docker engine: {{.ServerVersion}}'
 ddev version
+git --version
 composer --version
+node --version
+npm --version
 ```
 
-## 2. Configure the existing WordPress tree
+## Create the basic DDEV files
 
-Run from the directory containing `wp-admin`, `wp-content`, `wp-includes`, and `wp-config.php`:
+Run this from the directory containing `wp-admin`, `wp-content`, `wp-includes`, and `wp-config.php`:
 
 ```bash
 ddev config \
@@ -53,570 +64,293 @@ ddev config \
   --webserver-type=apache-fpm
 ```
 
-DDEV creates `.ddev/config.yaml` and normally creates `wp-config-ddev.php` for a user-managed WordPress configuration.
+This creates `.ddev/config.yaml` and `wp-config-ddev.php`.
 
-Pin project compatibility versions only when needed:
+Choose different PHP or database versions only when the project requires them:
 
 ```bash
 ddev config --php-version=8.4 --database=mariadb:11.8
 ```
 
-## 3. Adapt `wp-config.php`
+Do not start DDEV yet when `wp-config.php` still contains unconditional remote database values. Guided setup adapts a recognized standard file before starting DDEV.
 
-Before the database constants:
+## Install `.test-tools`
 
-```php
-$is_ddev = getenv('IS_DDEV_PROJECT') === 'true';
+Clone the toolkit before adapting `wp-config.php`:
+
+```bash
+git clone https://github.com/froger-me/wp-test.git .test-tools
 ```
 
-Use remote credentials only outside DDEV:
+This order makes the setup command available for all remaining work.
+
+## Run guided setup
+
+First inspect without changing anything:
+
+```bash
+bash .test-tools/setup-host.sh --check
+```
+
+Then run the guided setup:
+
+```bash
+bash .test-tools/setup-host.sh
+```
+
+The command asks before editing files, changing DDEV configuration, starting DDEV, or preparing the working database. It runs `composer doctor` and `composer test:harness` at the end. It offers the complete PHP and browser test run separately.
+
+After root Composer commands have been added, later runs can use:
+
+```bash
+composer setup
+```
+
+For a known existing WordPress database, a deliberate run without questions is:
+
+```bash
+composer setup -- --yes --database=keep
+```
+
+`--yes` does not decide deployment policy, create optional configuration files, choose a database source, or handle an unfamiliar `wp-config.php`. Supply the database choice explicitly. Add `--run-tests` to run the complete suite after setup:
+
+```bash
+composer setup -- --yes --database=keep --run-tests
+```
+
+## Choose the working database
+
+Guided setup asks for one of three choices.
+
+### Keep the existing database
+
+Choose `keep` when database `db` already contains the local WordPress site. The command verifies that WordPress is installed and does not replace the database.
+
+### Make a clean WordPress installation
+
+Choose `clean` only when WordPress is not installed in `db`. The command asks for the local URL, site title, administrator login, email address, and password. It refuses to hide deletion of an existing site behind this choice.
+
+### Refresh from a remote WordPress installation
+
+Copy the ignored local example:
+
+```bash
+cp .test-tools/db-refresh-config-example.php .test-tools/db-refresh.local.php
+```
+
+Fill in the SSH alias, absolute remote WordPress path, remote URL, and local URL. Keep connection passwords and keys in the user's SSH configuration.
+
+Choose `pull` during setup, or run the refresh later:
+
+```bash
+composer db:pull
+```
+
+The refresh confirms its source and destination, downloads and verifies a compressed database export, creates a local DDEV snapshot, imports only into `db`, and replaces the remote URL throughout WordPress data. If import or URL replacement fails, it attempts to restore the snapshot.
+
+## Complete project-specific configuration
+
+Guided setup reports these items instead of guessing them.
+
+### Manual `wp-config.php` arrangement
+
+The command edits only a recognized standard file or completes missing debug settings in an already supported DDEV arrangement. It leaves custom or unclear files untouched.
+
+For a manual setup, define the DDEV check before database settings:
 
 ```php
-if (! $is_ddev) {
-	define('DB_NAME', 'REMOTE_DATABASE_NAME');
-	define('DB_USER', 'REMOTE_DATABASE_USER');
-	define('DB_PASSWORD', 'REMOTE_DATABASE_PASSWORD');
-	define('DB_HOST', 'localhost');
+$is_ddev = getenv( 'IS_DDEV_PROJECT' ) === 'true';
+```
+
+Keep remote database settings outside DDEV:
+
+```php
+if ( ! $is_ddev ) {
+	define( 'DB_NAME', 'REMOTE_DATABASE_NAME' );
+	define( 'DB_USER', 'REMOTE_DATABASE_USER' );
+	define( 'DB_PASSWORD', 'REMOTE_DATABASE_PASSWORD' );
+	define( 'DB_HOST', 'localhost' );
 }
 
-defined('DB_CHARSET') || define('DB_CHARSET', 'utf8');
-defined('DB_COLLATE') || define('DB_COLLATE', '');
+defined( 'DB_CHARSET' ) || define( 'DB_CHARSET', 'utf8' );
+defined( 'DB_COLLATE' ) || define( 'DB_COLLATE', '' );
 ```
 
-Define debug behavior without redefining DDEV-managed constants:
+Set local WordPress logging without displaying errors in pages:
 
 ```php
-defined('WP_DEBUG') || define('WP_DEBUG', true);
-defined('WP_DEBUG_LOG') || define('WP_DEBUG_LOG', $is_ddev);
-defined('WP_DEBUG_DISPLAY') || define('WP_DEBUG_DISPLAY', false);
+defined( 'WP_DEBUG' ) || define( 'WP_DEBUG', true );
+defined( 'WP_DEBUG_LOG' ) || define( 'WP_DEBUG_LOG', $is_ddev );
+defined( 'WP_DEBUG_DISPLAY' ) || define( 'WP_DEBUG_DISPLAY', false );
 ```
 
-`composer tail:log` and `composer clear:log` require `WP_DEBUG` to be `true` in DDEV and `WP_DEBUG_LOG` to be either `true` or the exact local `wp-content/debug.log` path. They do not edit these settings automatically.
-
-Make server-specific PHP error logging conditional:
+Preserve a server-specific PHP error-log path outside DDEV:
 
 ```php
-ini_set('log_errors', '1');
-
-if ($is_ddev) {
-	ini_set('error_log', __DIR__ . '/wp-content/debug.log');
+if ( $is_ddev ) {
+	ini_set( 'log_errors', '1' );
+	ini_set( 'error_log', __DIR__ . '/wp-content/debug.log' );
 } else {
-	ini_set('error_log', '/remote/path/to/error_log');
+	ini_set( 'error_log', '/remote/path/to/php-error.log' );
 }
 ```
 
-At the bottom, define `ABSPATH` before including DDEV's generated settings:
+At the bottom, define `ABSPATH`, load DDEV's generated values locally, then load WordPress once:
 
 ```php
-if (! defined('ABSPATH')) {
-	define('ABSPATH', __DIR__ . '/');
+if ( ! defined( 'ABSPATH' ) ) {
+	define( 'ABSPATH', __DIR__ . '/' );
 }
 
-if ($is_ddev) {
+if ( $is_ddev ) {
 	require_once __DIR__ . '/wp-config-ddev.php';
 }
 
 require_once ABSPATH . 'wp-settings.php';
 ```
 
-Validate:
+Check the file and rerun setup:
 
 ```bash
 php -l wp-config.php
+composer setup -- --check
 ```
 
-## 4. Exclude local-only files from deployment
+Guided edits create a backup named like `wp-config.php.before-test-tools-20260806T120000Z`. An invalid edited file is replaced immediately with its original backup.
 
-For a VS Code SFTP `ignore` array, include:
+### Deployment exclusions
 
-```json
-".ddev",
-".test-tools",
-".wp-test.php",
-"wp-config-ddev.php",
-"wp-config.php.before-ddev"
-```
+The command can add known paths to an ordinary root `.gitignore`. It does not ignore `.test-tools` when `.gitmodules` declares it as a Git submodule.
 
-Validate the JSON:
-
-```bash
-python3 -m json.tool .vscode/sftp.json >/dev/null
-```
-
-For a parent WordPress Git repository using an ordinary nested clone:
+For another Git arrangement, review these entries yourself:
 
 ```gitignore
 .test-tools/
 .wp-test.php
 wp-config-ddev.php
 wp-config.php.before-ddev
+wp-config.php.before-test-tools-*
+composer.json.before-test-tools-*
+.gitignore.before-test-tools-*
 ```
 
-Do not ignore `.test-tools` when intentionally using it as a Git submodule. `.ddev/` may be committed to share the local environment, but should remain excluded from SFTP deployment.
-
-## 5. Start DDEV
-
-```bash
-ddev start
-```
-
-Routine test commands require DDEV to be running and never start it implicitly. Logging commands follow the host-mounted `wp-content/debug.log` directly and do not manage DDEV lifecycle.
-
-## 6. Populate the working database
-
-Choose one option.
-
-### Option A: clean installation
-
-```bash
-ddev wp core install \
-  --url="https://your-project-name.ddev.site" \
-  --title="Local WordPress Development" \
-  --admin_user="admin" \
-  --admin_email="admin@example.test" \
-  --prompt=admin_password
-```
-
-### Option B: import an existing database
-
-For a repeatable refresh after initial setup, copy the ignored local configuration:
-
-```bash
-cp .test-tools/db-refresh-config-example.php .test-tools/db-refresh.local.php
-```
-
-Edit the copied file with an existing SSH alias, the absolute remote WordPress path, the remote URL, and the local DDEV URL. Keep authentication in the user's SSH configuration. Then run:
-
-```bash
-composer db:pull
-```
-
-The command shows the exact source and destination and requires typed confirmation. It downloads and verifies a compressed export, creates an automatic local snapshot, imports into `db`, and safely replaces the URL inside serialized WordPress data. If the import or replacement fails, it attempts to restore the snapshot. Use `composer db:pull -- --yes` only for deliberate non-interactive use.
-
-The equivalent manual process is:
-
-Export through an existing SSH alias:
-
-```bash
-ssh your-ssh-alias '
-  set -o pipefail
-  cd /remote/path/to/wordpress
-  wp db export - --add-drop-table --max_allowed_packet=1G | gzip -c
-' > /tmp/wordpress-remote.sql.gz
-```
-
-Verify and import:
-
-```bash
-gzip -t /tmp/wordpress-remote.sql.gz
-ddev import-db --file=/tmp/wordpress-remote.sql.gz
-```
-
-Replace URLs with serialized-data support:
-
-```bash
-ddev wp search-replace \
-  'https://remote.example.test' \
-  'https://your-project-name.ddev.site' \
-  --all-tables \
-  --skip-columns=guid \
-  --precise
-```
-
-Create a working restore point:
-
-```bash
-ddev snapshot --name=initial-working-local
-```
-
-The toolkit also provides explicit local maintenance commands:
-
-```bash
-composer snapshot
-composer snapshot -- descriptive-name
-composer restore -- descriptive-name
-composer reset:tests
-```
-
-`snapshot` creates a dated name when none is supplied. A DDEV snapshot contains every project database. `restore` therefore requires confirmation and can replace both `db` and `wp_tests`. `reset:tests` requires separate confirmation and permanently recreates only `wp_tests`; it never changes `db`. Both destructive commands accept `--yes` after `--` for deliberate non-interactive use.
-
-## 7. Create the disposable test database
-
-```bash
-ddev mysql -uroot -proot -e "
-CREATE DATABASE IF NOT EXISTS wp_tests
-CHARACTER SET utf8mb4
-COLLATE utf8mb4_unicode_ci;
-
-GRANT ALL PRIVILEGES ON wp_tests.* TO 'db'@'%';
-FLUSH PRIVILEGES;
-"
-```
-
-Verify:
-
-```bash
-ddev mysql -N -e "
-SELECT SCHEMA_NAME
-FROM information_schema.SCHEMATA
-WHERE SCHEMA_NAME = 'wp_tests';
-"
-```
-
-The fixed safety values are:
-
-- working database: `db`
-- PHPUnit database: `wp_tests`
-- database host: `db`
-- PHPUnit prefix: `wptests_`
-
-`composer doctor` loads `wp-config-ddev.php`, confirms that WordPress actually uses database `db` on host `db`, connects with the generated DDEV credentials, and verifies that both `db` and `wp_tests` exist.
-
-## 8. Add Subversion to DDEV
-
-The matching WordPress PHPUnit library is retrieved from the official WordPress Subversion repository:
-
-```bash
-ddev config --webimage-extra-packages=subversion
-ddev restart
-ddev exec svn --version --quiet
-```
-
-This is a one-time DDEV image configuration. Routine commands do not rebuild the image.
-
-## 9. Install `.test-tools`
-
-```bash
-git clone https://github.com/froger-me/wp-test.git .test-tools
-ddev exec --dir=/var/www/html/.test-tools composer install
-cd .test-tools
-npm install
-npx playwright install chromium
-cd ..
-```
-
-The browser tests use Node.js and Chromium on the host. `node`, `npm`, and `npx` must therefore be available on the host command path. Node packages remain inside `.test-tools/node_modules`.
-
-The cloned `.test-tools/composer.json` already exposes every toolkit command. No root Composer configuration is required when commands will only be run from inside `.test-tools`.
-
-Ensure the executable shell entry points remain executable:
-
-```bash
-chmod +x \
-  .test-tools/run-tests-host.sh \
-  .test-tools/run-e2e-host.sh \
-  .test-tools/run-all-host.sh \
-  .test-tools/sync-wordpress-tests.sh
-```
-
-`doctor-host.sh` and `log-host.sh` are invoked through `bash` and do not require executable bits.
-
-## 10. Mirror the commands at the WordPress root
-
-To use the same commands without changing into `.test-tools`, create or merge these entries into the WordPress root `composer.json`:
-
-```json
-{
-    "name": "local/wordpress-development-site",
-    "version": "1.0.0",
-    "private": true,
-    "config": {
-        "process-timeout": 0
-    },
-    "scripts": {
-        "doctor": "bash .test-tools/doctor-host.sh",
-        "lint:wpcs": "bash .test-tools/run-wpcs.sh check",
-        "format:wpcs": "bash .test-tools/run-wpcs.sh fix",
-        "tail:log": "bash .test-tools/log-host.sh tail",
-        "clear:log": "bash .test-tools/log-host.sh clear",
-        "test": "bash .test-tools/run-all-host.sh",
-        "test:php": "bash .test-tools/run-tests-host.sh",
-        "test:harness": "bash .test-tools/run-tests-host.sh --profile=harness",
-        "test:plugin": "bash .test-tools/run-tests-host.sh --profile=plugin",
-        "test:theme": "bash .test-tools/run-tests-host.sh --profile=theme",
-        "test:multisite": "bash .test-tools/run-tests-host.sh --profile=multisite",
-        "test:destructive": "bash .test-tools/run-tests-host.sh --include-destructive --group destructive",
-        "test:coverage": "bash .test-tools/run-tests-host.sh --coverage",
-        "test:junit": "bash .test-tools/run-tests-host.sh --junit",
-        "test:e2e": "bash .test-tools/run-e2e-host.sh"
-    }
-}
-```
-
-The explicit local version prevents Composer from warning that it cannot infer a root-package version when the WordPress root is not itself a Git repository.
-
-For an existing root `composer.json`, add it with:
-
-```bash
-COMPOSER_ROOT_VERSION=1.0.0 composer config version 1.0.0
-```
-
-The temporary environment value suppresses the warning while Composer writes the permanent `version` field.
-
-Do not replace unrelated existing Composer configuration. Keep the root command names and arguments aligned with `.test-tools/composer.json`.
-
-Both Composer files invoke the same host wrappers. The wrappers resolve the WordPress root from their own installation path before calling DDEV, so behavior does not depend on whether Composer was started in the WordPress root or `.test-tools`.
-
-## 11. Run diagnostics and harness tests
-
-From the WordPress root:
-
-```bash
-composer doctor
-composer test:harness
-```
-
-Or from inside the toolkit:
-
-```bash
-cd .test-tools
-composer doctor
-composer test:harness
-```
-
-The results and side effects are identical. Neither form requires `ddev sh`, and neither form starts or rebuilds DDEV.
-
-`composer doctor` is read-only. It verifies:
-
-- DDEV is already running;
-- the expected WordPress root exists;
-- `wp-config-ddev.php` defines the expected working database, host, user, and password;
-- the DDEV database service accepts those generated credentials;
-- working database `db` and PHPUnit database `wp_tests` both exist;
-- the test database and prefix are fixed and distinct from the working database;
-- required commands and PHP extensions are available;
-- generated directories are writable;
-- Composer dependencies are installed;
-- the installed WordPress and DDEV PHP versions are covered by the compatibility policy; and
-- an existing generated `wp-tests-config.php` still targets the safe database.
-
-Every public PHPUnit command uses this same Doctor implementation, including default, harness, plugin, theme, multisite, destructive, coverage, and JUnit profiles.
-
-`composer test:harness` additionally proves lifecycle activation, custom tables, options, roles, cron, REST authorization, uploads, mail capture, HTTP isolation, extension discovery, and helper cleanup using toolkit fixture extensions.
-
-Check the browser surface after installing Chromium:
-
-```bash
-composer test:e2e
-```
-
-This command requires DDEV to be running already and refuses a WordPress address whose host name differs from DDEV's local address. It creates a temporary database snapshot and saves `wp-content/uploads` and `wp-content/mu-plugins`. After the run, including a failed or interrupted run, it restores and compares the database and saved file paths. It does not use a developer's WordPress account.
-
-## 12. Run all default tests
-
-From either supported directory:
-
-```bash
-composer test
-```
-
-This runs the default PHP integration tests first and the Playwright browser tests second. It does not accept runner-specific options. Use the commands below when only one test surface is needed:
-
-```bash
-composer test:php
-composer test:e2e
-```
-
-The PHP-only command reads the working site's active ordinary plugins, active theme, and parent theme. It does not modify the working site's active-plugin option.
-
-Conventional extension paths are discovered automatically:
+When `.vscode/sftp.json` is valid JSON with an `ignore` list, interactive setup offers to add:
 
 ```text
-wp-content/plugins/<slug>/tests/phpunit/**/*Test.php
-wp-content/plugins/<slug>/tests/phpunit/**/test-*.php
-wp-content/plugins/<slug>/tests/phpunit/bootstrap.php
-
-wp-content/themes/<slug>/tests/phpunit/**/*Test.php
-wp-content/themes/<slug>/tests/phpunit/**/test-*.php
-wp-content/themes/<slug>/tests/phpunit/bootstrap.php
+.vscode
+.ddev
+.test-tools
+.wp-test.php
+wp-config-ddev.php
+wp-config.php.before-ddev
+wp-config.php.before-test-tools-*
+composer.json
+composer.lock
+composer.json.before-test-tools-*
 ```
 
-Extension bootstraps run before WordPress boots. Use them for constants, local Composer autoloaders, and `tests_add_filter()` registration.
+For rsync, a hosting control panel, or another deployment method, add equivalent exclusions manually. Decide separately whether `.ddev/` belongs in the parent Git repository; it must not be deployed to the web server.
 
-## 13. Add optional project configuration
+Backups of SFTP configuration are stored with owner-only permissions below the ignored `.test-tools/runtime/setup-backups/` directory so connection details are not copied into a deployable path.
 
-When the active-site defaults need adjustment, run this from the WordPress root:
+### Optional test selection
+
+Most projects need no `.wp-test.php`. Active plugins, the active theme, and its parent theme are selected automatically.
+
+Create the example only when selection needs adjustment:
 
 ```bash
 cp .test-tools/wp-test.config.example.php .wp-test.php
 ```
 
-Example:
+The file supports additional or excluded plugins and themes, focused-run dependencies, one site-wide PHP setup file, one browser setup file, and extra paths below `wp-content` that browser tests must restore.
 
-```php
-<?php
+Keep real plugin behavior in plugin code. Do not add toolkit-specific code merely to make ordinary plugin or theme tests discoverable.
 
-declare(strict_types=1);
+### Optional local services
 
-return [
-	'include_plugins' => [
-		'plugin-needed-only-for-tests',
-	],
-	'exclude_plugins' => [
-		'plugin-that-cannot-run-in-tests',
-	],
-	'include_themes' => [],
-	'exclude_themes' => [],
-	'plugin_dependencies' => [
-		'my-plugin' => ['shared-library-plugin'],
-	],
-	'theme_dependencies' => [
-		'my-theme' => ['theme-support-plugin'],
-	],
-	'bootstrap' => 'tests/phpunit/site-bootstrap.php',
-];
-```
+Redis, compatible object storage, and similar services are not installed by guided setup. Add them only when a plugin needs the real local protocol. Record the choice in the project's own DDEV documentation.
 
-The optional site bootstrap is loaded at the same pre-WordPress stage as extension bootstraps.
+## Review the setup result
 
-## 14. Focused and specialist runs
-
-These commands work from the WordPress root or `.test-tools`:
+Run the read-only environment check:
 
 ```bash
-composer test:plugin -- my-plugin
-composer test:theme -- my-theme
-composer test:multisite
-composer test:destructive
+composer doctor
 ```
 
-Pass PHPUnit options after the slug where applicable:
+It confirms the fixed safe database names, DDEV database connection, installed programs and PHP features, WordPress and PHP compatibility, writable generated directories, and installed toolkit packages.
+
+Run the toolkit's own checks:
 
 ```bash
-composer test:plugin -- my-plugin --filter UpgradeTest
-composer test:php -- --group rest
+composer test:harness
 ```
 
-Focused browser runs use the same extension selection rules:
+Run all active plugin, theme, and browser tests:
 
 ```bash
-composer test:e2e -- --profile=plugin my-plugin
-composer test:e2e -- --profile=theme my-theme
-composer test:e2e -- --grep "settings"
+composer test
 ```
 
-Add extension browser tests and optional repeatable data setup at:
+`composer test` runs PHP tests first and browser tests second. Browser tests save and restore the working database, uploads, must-use plugins, and configured extra paths.
+
+## Add ordinary plugin and theme tests
+
+The toolkit finds normal WordPress test locations without project-specific registration:
 
 ```text
+wp-content/plugins/<slug>/tests/phpunit/**/*Test.php
+wp-content/plugins/<slug>/tests/phpunit/**/test-*.php
+wp-content/plugins/<slug>/tests/phpunit/bootstrap.php
 wp-content/plugins/<slug>/tests/e2e/**/*.spec.ts
 wp-content/plugins/<slug>/tests/e2e/fixtures.php
+
+wp-content/themes/<slug>/tests/phpunit/**/*Test.php
+wp-content/themes/<slug>/tests/phpunit/**/test-*.php
+wp-content/themes/<slug>/tests/phpunit/bootstrap.php
 wp-content/themes/<slug>/tests/e2e/**/*.spec.ts
 wp-content/themes/<slug>/tests/e2e/fixtures.php
 ```
 
-The PHP setup file runs with WordPress fully loaded after the database snapshot. Import the toolkit Playwright wrapper from a conventional extension test file to record browser messages and failed requests:
+PHP test classes can extend `WP_UnitTestCase` or `WpTest\IntegrationTestCase`. Browser tests can import directly from `@playwright/test`.
+
+Use the toolkit browser wrapper only when a test needs the extra browser-message and failed-request details:
 
 ```ts
 import { test, expect, lowerCapabilityStorageState } from '../../../../../.test-tools/e2e/test';
 ```
 
-The default user is the temporary administrator. Use `test.use({ storageState: lowerCapabilityStorageState })` for the temporary editor.
+The default browser state is an administrator. The exported lower-capability state is an editor.
 
-The temporary must-use plugin defines `WP_TEST_E2E`. Plugins should check it to replace CAPTCHA, payments, object storage, webhooks, and update checks with local behavior. Outgoing WordPress HTTP calls are blocked unless they target the local site, a loopback address, or Mailpit. Mailpit receives email. No real service account is used by this command.
+## Daily commands
 
-Optional `.wp-test.php` browser settings:
-
-```php
-return [
-	'e2e_bootstrap' => 'tests/e2e/site-fixtures.php',
-	'e2e_filesystem_paths' => [
-		'wp-content/plugin-generated-files',
-	],
-];
-```
-
-`e2e_bootstrap` names one site-wide PHP setup file. Each `e2e_filesystem_paths` value must be below `wp-content`; it is saved, restored, and compared with its original contents.
-
-Destructive tests are excluded from all normal runs. Tag uninstall or deliberately destructive tests:
-
-```php
-/**
- * @group destructive
- */
-public function test_uninstall_cleanup(): void
-{
-	// ...
-}
-```
-
-## 15. Use the helper surface
-
-Plugin and theme tests may extend:
-
-```php
-use WpTest\IntegrationTestCase;
-
-final class SettingsTest extends IntegrationTestCase
-{
-	public function test_settings_and_cron(): void
-	{
-		$this->set_tracked_option('my_plugin_setting', 'value');
-		$this->assert_cron_event_scheduled('my_plugin_cron');
-	}
-}
-```
-
-HTTP mocks:
-
-```php
-use WpTest\HttpMock;
-
-HttpMock::queue(
-	'https://service.example.test/api',
-	HttpMock::response('{"ok":true}'),
-	HttpMock::timeout()
-);
-```
-
-Unmocked requests fail with `unexpected_http_request`.
-
-## 16. Logging and reporting
-
-### WordPress debug log
-
-Follow the local WordPress debug log from either supported directory:
+The same commands work from the WordPress root and `.test-tools`:
 
 ```bash
-composer tail:log
-```
-
-The command:
-
-- reads `WP_DEBUG` and `WP_DEBUG_LOG` from `wp-config.php` locally without booting WordPress or entering DDEV;
-- validates the standard local logging destination;
-- creates `wp-content/debug.log` when it is missing and the directory is writable; and
-- follows the host-mounted file with `tail -F`, including across file rotation or recreation.
-
-Press `Ctrl+C` to stop following the file with a successful exit status. DDEV remains running.
-
-Clear the local file without deleting it:
-
-```bash
-composer clear:log
-```
-
-The clear command performs the same configuration and writability checks before truncating the file.
-
-For DDEV service logs, use the direct commands because the toolkit adds no safety or convenience beyond DDEV itself:
-
-```bash
-ddev logs -f
-ddev logs -s db -f
-```
-
-### JUnit
-
-```bash
+composer setup -- --check
+composer doctor
+composer test
+composer test:php
+composer test:e2e
+composer test:harness
+composer test:plugin -- plugin-slug
+composer test:theme -- theme-slug
+composer test:multisite
+composer test:destructive
+composer test:coverage
 composer test:junit
+composer tail:log
+composer clear:log
+composer db:pull
+composer snapshot -- descriptive-name
+composer restore -- descriptive-name
+composer reset:tests
 ```
 
-Output:
+`restore` and `reset:tests` require typed confirmation. `db:pull` creates a snapshot before replacing `db`. `reset:tests` can recreate only `wp_tests`.
 
-```text
-.test-tools/runtime/junit.xml
-```
-
-### Coverage
+Coverage requires Xdebug or PCOV. With DDEV Xdebug:
 
 ```bash
 ddev xdebug on
@@ -624,138 +358,72 @@ composer test:coverage
 ddev xdebug off
 ```
 
-Output:
+For DDEV service logs, use:
 
-```text
-.test-tools/coverage/
+```bash
+ddev logs -f
+ddev logs -s db -f
 ```
 
-Coverage is never enabled in the default path.
+## Update WordPress and the toolkit
 
-## 17. Generated paths
-
-The toolkit ignores:
-
-```text
-.test-tools/.wordpress-test-version
-.test-tools/active-plugins.json
-.test-tools/coverage/
-.test-tools/node_modules/
-.test-tools/playwright-report/
-.test-tools/runtime/
-.test-tools/test-results/
-.test-tools/vendor/
-.test-tools/wordpress/
-.test-tools/wordpress-tests-lib/
-```
-
-`runtime/` contains generated manifests, temporary browser-test backups, PHPUnit configuration, working-site selection records, the isolated upload directory, and linked extension files. Successful browser runs remove their temporary backups. If restoration fails, the error keeps and names the backup for manual recovery.
-
-Failed browser tests retain a trace, screenshot, browser messages, failed requests, test title, selected profile, and WordPress debug-log excerpt in `test-results/`. The readable browser report is in `playwright-report/`.
-
-`wp-content/debug.log` belongs to the consuming WordPress installation. The logging commands may create or truncate that local file but never add it to the toolkit repository.
-
-## 18. WordPress and toolkit updates
-
-After a WordPress update, run from either supported directory:
+After a WordPress update:
 
 ```bash
 composer doctor
 composer test
 ```
 
-The next test run synchronizes the clean core and WordPress test library to the detected WordPress version. An unknown WordPress branch fails with an explicit compatibility message.
+The next PHP test run downloads the matching clean WordPress core and official WordPress PHP test library.
 
-Update the toolkit from the WordPress root:
+Update the toolkit:
 
 ```bash
 git -C .test-tools pull --ff-only
-ddev exec --dir=/var/www/html/.test-tools composer install
-cd .test-tools && npm install && npx playwright install chromium && cd ..
-composer doctor
-composer test:harness
+composer setup -- --yes --database=keep
 composer test
 ```
 
-Or run the post-update checks inside `.test-tools`:
+The repeated setup command installs missing package updates and keeps existing project choices.
 
-```bash
-cd .test-tools
-composer doctor
-composer test:harness
-composer test
-```
+## Common problems
 
-## Troubleshooting
+### Guided setup reports an unfamiliar `wp-config.php`
 
-### DDEV is stopped
+The file was not changed. Use the manual arrangement above, run `php -l wp-config.php`, then run `composer setup -- --check` again.
 
-`composer doctor` and all test commands fail from both supported directories. Start DDEV explicitly from the WordPress root:
+### DDEV files are missing
+
+Run the initial `ddev config` command from the WordPress root. Guided setup requires both `.ddev/config.yaml` and `wp-config-ddev.php`.
+
+### DDEV is stopped later
+
+Ordinary test and logging commands never start DDEV. Start it explicitly:
 
 ```bash
 ddev start
 ```
 
-### WordPress logging is not configured
+### `wp_tests` is missing or damaged
 
-Use the local settings from Step 3. `composer tail:log` and `composer clear:log` reject `WP_DEBUG` values other than `true`, disabled `WP_DEBUG_LOG`, and custom log destinations because the public commands intentionally operate only on `wp-content/debug.log`.
-
-The commands never modify `wp-config.php`. Correct the configuration, then rerun the command.
-
-### The debug log is missing or unwritable
-
-A missing file is created automatically only when `wp-content` is writable. Correct ownership or permissions when the command reports that the directory or file cannot be written. Do not point the command at a remote log.
-
-### Composer cannot detect the root package version
-
-Add the explicit local version from Step 10:
+Recreate only the test database:
 
 ```bash
-COMPOSER_ROOT_VERSION=1.0.0 composer config version 1.0.0
+composer reset:tests
 ```
 
-This warning concerns the WordPress root package, not `.test-tools` or PHPUnit.
+### The debug log is unavailable
 
-### Command exists in only one directory
+Check the manual `WP_DEBUG`, `WP_DEBUG_LOG`, and `WP_DEBUG_DISPLAY` settings above. The local `wp-content` directory must be writable.
 
-Update `.test-tools`, then compare the root `scripts` entries from Step 10 with `.test-tools/composer.json`. Public command names must remain mirrored.
+### A root Composer command conflicts
 
-### `wp_tests` is missing
+Guided setup preserves unrelated commands and refuses a name already used for different work. Rename the existing command or decide explicitly which command the project should expose, then rerun setup.
 
-Repeat Step 7. Tests never create or substitute a database automatically.
+### Browser packages are missing
 
-### WordPress/PHP compatibility failure
+Rerun setup. It checks Node.js packages and installs Chromium without changing the working database when `--database=keep` is selected.
 
-Select a DDEV PHP version supported by the installed WordPress branch, then explicitly restart DDEV:
+### A browser test was interrupted
 
-```bash
-ddev config --php-version=8.4
-ddev restart
-composer doctor
-```
-
-### Extension bootstrap failure
-
-The error identifies the extension slug and bootstrap path. Remember that the file runs before full WordPress bootstrap.
-
-### Activation failure
-
-The error identifies the plugin path and includes captured activation output where WordPress provides it.
-
-### Coverage unavailable
-
-Enable Xdebug or install/enable PCOV explicitly. The test command does not change DDEV configuration.
-
-### Mutagen conflicts
-
-```bash
-ddev utility mutagen-diagnose
-```
-
-Remove `.DS_Store` conflicts and reset Mutagen only when diagnostics call for it:
-
-```bash
-find . -name '.DS_Store' -type f -delete
-ddev mutagen reset
-ddev restart
-```
+The browser command attempts database and file restoration for success, failure, interruption, and termination signals. If restoration itself fails, the error names the retained DDEV snapshot and local backup directory for manual recovery.

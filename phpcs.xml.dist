@@ -9,6 +9,7 @@
 	<config name="testVersion" value="8.0-"/>
 
 	<rule ref="WordPress"/>
+	<exclude-pattern>/fixtures/setup/*</exclude-pattern>
 
 	<!-- Limit filename exceptions to PSR-4 source classes, PHPUnit's *Test.php
 	     discovery convention, and the copyable dot-named config example. -->

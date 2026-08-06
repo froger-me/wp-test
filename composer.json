@@ -16,6 +16,7 @@
         "sort-packages": true
     },
     "scripts": {
+        "setup": "bash setup-host.sh",
         "doctor": "bash doctor-host.sh",
         "lint:wpcs": "bash run-wpcs.sh check",
         "format:wpcs": "bash run-wpcs.sh fix",
@@ -37,6 +38,7 @@
         "test:e2e": "bash run-e2e-host.sh"
     },
     "scripts-descriptions": {
+        "setup": "Inspect and guide the local WordPress and test-tool setup.",
         "doctor": "Run the read-only DDEV and PHPUnit safety preflight.",
         "lint:wpcs": "Check all non-ignored PHP files against WordPress Coding Standards.",
         "format:wpcs": "Automatically fix WordPress Coding Standards violations where possible.",

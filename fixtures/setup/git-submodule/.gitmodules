@@ -1,0 +1,3 @@
+[submodule ".test-tools"]
+	path = .test-tools
+	url = https://example.invalid/wp-test.git

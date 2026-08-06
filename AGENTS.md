@@ -10,7 +10,7 @@ The goal is a lightweight, deterministic local test and development utility surf
 
 1. PHPUnit uses only database `wp_tests` with prefix `wptests_`. Never run destructive tests against working database `db`.
 2. External services are blocked by default. Add explicit mocks or separately named opt-in integration commands; never weaken the default block to make a test pass.
-3. Routine commands must not call DDEV start, stop, restart, rebuild, or configuration commands. Environment lifecycle remains explicit. `composer test:e2e` may call DDEV's database snapshot and restore commands; DDEV may recreate service containers internally while restoring a snapshot.
+3. Routine commands must not call DDEV start, stop, restart, rebuild, or configuration commands. Environment lifecycle remains explicit. The guided `composer setup` command may configure and start DDEV because that is its stated purpose and every lasting change is reported or confirmed. `composer test:e2e` may call DDEV's database snapshot and restore commands; DDEV may recreate service containers internally while restoring a snapshot.
 4. Every public Composer command must be available with the same name and behavior from both the consuming WordPress root and the `.test-tools` directory.
 5. Developers must not need to enter `ddev sh` for normal work. Host wrappers may use `ddev wp` or `ddev exec`, but not lifecycle or configuration commands.
 6. Never add site-specific domains, absolute user paths, SSH aliases, secrets, passwords, API keys, buckets, or service credentials.
@@ -52,6 +52,7 @@ Add one documented configuration entry point when a path needs to become configu
 Current public commands are exposed from both the consuming WordPress root and `.test-tools`:
 
 ```text
+composer setup
 composer doctor
 composer lint:wpcs
 composer format:wpcs
@@ -78,6 +79,10 @@ The toolkit's `composer.json` owns the `.test-tools` command mappings. The consu
 Rules:
 
 - host wrappers must resolve the WordPress root from their own location and must not depend on the caller's current working directory;
+- `composer setup` must remain usable through `bash .test-tools/setup-host.sh` before dependencies or a root Composer file exist;
+- setup file inspection must not return existing configuration values, and setup writers must use backups, temporary files, validation, and restoration on failure;
+- `composer setup -- --check` must not change files, packages, services, or databases;
+- `composer setup -- --yes` still requires an explicit database choice and must not decide deployment policy or optional project configuration;
 - preserve native PHPUnit argument passthrough from both Composer locations;
 - `composer test` runs the default PHP tests followed by browser tests and rejects runner-specific arguments;
 - keep command names, profiles, exit codes, and side effects identical in both locations;

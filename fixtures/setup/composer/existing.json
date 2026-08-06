@@ -1,0 +1,9 @@
+{
+    "name": "example/existing-site",
+    "require": {
+        "example/package": "^1.0"
+    },
+    "scripts": {
+        "site:command": "php site-command.php"
+    }
+}
