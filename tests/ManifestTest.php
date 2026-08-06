@@ -4,7 +4,10 @@
  *
  * @package AnyapeWPTestTools
  */
+
 declare(strict_types=1);
+
+// phpcs:disable WordPress.WP.AlternativeFunctions -- These tests create and remove private fixture projects.
 
 use AnyapeWPTestTools\IntegrationTestCase;
 use AnyapeWPTestTools\Manifest;
