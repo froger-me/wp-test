@@ -9,6 +9,7 @@ anyape_wp_test_tools_strip_terminal_decoration() {
 anyape_wp_test_tools_log_initialize() {
 	local toolkit_dir="$1"
 	local command_name="$2"
+	local clear_previous_logs="${3:-0}"
 	ANYAPE_WP_TEST_TOOLS_LOG_OWNER=0
 	if [[ -z "${ANYAPE_WP_TEST_TOOLS_LOG_FILE:-}" ]]; then
 		local log_directory="$toolkit_dir/runtime/logs"
@@ -16,6 +17,9 @@ anyape_wp_test_tools_log_initialize() {
 		run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 		umask 077
 		mkdir -p "$log_directory"
+		if [[ "$clear_previous_logs" == "1" ]]; then
+			rm -f -- "$log_directory"/*.log
+		fi
 		ANYAPE_WP_TEST_TOOLS_LOG_FILE="$log_directory/$command_name-$run_id.log"
 		: > "$ANYAPE_WP_TEST_TOOLS_LOG_FILE"
 		ANYAPE_WP_TEST_TOOLS_LOG_OWNER=1
@@ -58,6 +62,26 @@ anyape_wp_test_tools_run_logged() {
 		return "$status"
 	fi
 	echo "Complete: $description"
+}
+
+anyape_wp_test_tools_run_standalone_test() {
+	local toolkit_dir="$1"
+	local description="$2"
+	shift 2
+
+	export ANYAPE_WP_TEST_TOOLS_VERBOSE=1
+	anyape_wp_test_tools_log_initialize "$toolkit_dir" test 1
+	export ANYAPE_WP_TEST_TOOLS_LOG_FILE
+	echo "Detailed test output will be shown and saved to: $ANYAPE_WP_TEST_TOOLS_LOG_FILE"
+
+	local status=0
+	if anyape_wp_test_tools_run_logged "$description" "$@"; then
+		status=0
+	else
+		status=$?
+	fi
+	anyape_wp_test_tools_report_log
+	return "$status"
 }
 
 anyape_wp_test_tools_report_log() {
