@@ -4,6 +4,7 @@
  *
  * @package AnyapeWPTestTools
  */
+
 declare(strict_types=1);
 
 // phpcs:disable WordPress.WP.AlternativeFunctions -- These standalone host operations run before WordPress is loaded.
@@ -35,7 +36,12 @@ function anyape_wp_test_tools_read_json_object( string $path ): array {
 	return $data;
 }
 
-/** Return an unused dated backup path. */
+/**
+ * Return an unused dated backup path.
+ *
+ * @param string $path Original file path.
+ * @return string Unused backup path.
+ */
 function anyape_wp_test_tools_unused_backup_path( string $path ): string {
 	$base   = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' );
 	$backup = $base;
@@ -52,6 +58,9 @@ function anyape_wp_test_tools_unused_backup_path( string $path ): string {
 /**
  * Replace a complete local file through a temporary file beside it.
  *
+ * @param string   $path        Destination file path.
+ * @param string   $contents    Complete replacement contents.
+ * @param int|null $permissions Optional permission bits for the replacement.
  * @throws RuntimeException When the file cannot be written or replaced.
  */
 function anyape_wp_test_tools_atomic_write(
@@ -90,6 +99,7 @@ function anyape_wp_test_tools_atomic_write(
 /**
  * Fail when a PHP file does not pass the host PHP syntax check.
  *
+ * @param string $path PHP file path.
  * @throws RuntimeException When PHP reports invalid syntax.
  */
 function anyape_wp_test_tools_assert_php_syntax( string $path ): void {
@@ -100,7 +110,12 @@ function anyape_wp_test_tools_assert_php_syntax( string $path ): void {
 	}
 }
 
-/** Remove one path without following symbolic links. */
+/**
+ * Remove one path without following symbolic links.
+ *
+ * @param string $path File, link, or directory path.
+ * @throws RuntimeException When the path cannot be removed safely.
+ */
 function anyape_wp_test_tools_remove_path( string $path ): void {
 	if ( is_link( $path ) || is_file( $path ) ) {
 		if ( ! unlink( $path ) ) {
@@ -129,7 +144,12 @@ function anyape_wp_test_tools_remove_path( string $path ): void {
 	}
 }
 
-/** Remove a directory's contents while preserving the directory itself. */
+/**
+ * Remove a directory's contents while preserving the directory itself.
+ *
+ * @param string $path Directory path.
+ * @throws RuntimeException When the directory cannot be cleared safely.
+ */
 function anyape_wp_test_tools_clear_directory( string $path ): void {
 	if ( is_link( $path ) || ! is_dir( $path ) ) {
 		throw new RuntimeException( 'Path is not a directory that can be cleared: ' . $path );
@@ -147,7 +167,13 @@ function anyape_wp_test_tools_clear_directory( string $path ): void {
 	}
 }
 
-/** Copy one path without following symbolic links. */
+/**
+ * Copy one path without following symbolic links.
+ *
+ * @param string $source      Source file, link, or directory.
+ * @param string $destination Destination path.
+ * @throws RuntimeException When the path cannot be copied safely.
+ */
 function anyape_wp_test_tools_copy_path(
 	string $source,
 	string $destination
@@ -203,7 +229,13 @@ function anyape_wp_test_tools_copy_path(
 	}
 }
 
-/** Return a repeatable SHA-256 digest for one path. */
+/**
+ * Return a repeatable SHA-256 digest for one path.
+ *
+ * @param string $path File, link, directory, or missing path.
+ * @return string SHA-256 digest.
+ * @throws RuntimeException When a directory cannot be read.
+ */
 function anyape_wp_test_tools_path_digest( string $path ): string {
 	$entries = array();
 	$walk    = static function ( string $current, string $relative ) use ( &$walk, &$entries ): void {
@@ -229,7 +261,6 @@ function anyape_wp_test_tools_path_digest( string $path ): string {
 			if ( '.' !== $item && '..' !== $item ) {
 				$walk( $current . '/' . $item, '' === $relative ? $item : $relative . '/' . $item );
 			}
-		}
 	};
 
 	$walk( $path, '' );
