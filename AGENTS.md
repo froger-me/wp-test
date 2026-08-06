@@ -57,6 +57,10 @@ composer lint:wpcs
 composer format:wpcs
 composer tail:log
 composer clear:log
+composer db:pull
+composer snapshot
+composer restore -- <name>
+composer reset:tests
 composer test
 composer test:php
 composer test:harness
@@ -186,6 +190,9 @@ Keep this surface small. New keys require validation, documentation, examples, a
 - Test uploads and plugin-generated content belong under the runtime overlay.
 - Never write fixtures into the consuming site's real plugin, theme, or upload directories.
 - `composer clear:log` may truncate only the validated local `wp-content/debug.log`; it must not delete it or target configurable remote paths.
+- `composer db:pull` may replace only database `db`, must take a snapshot first, and must use the ignored `db-refresh.local.php` file. It must confirm the remote source and local destination before changing data.
+- `composer reset:tests` may drop and recreate only database `wp_tests`. `composer restore` may restore only an explicitly named local DDEV snapshot. Both require confirmation unless the caller deliberately passes `--yes`.
+- Remote database exports must stream through the configured SSH alias, use compression and a large packet limit, and pass archive verification before local data changes. Connection secrets must remain in the user's SSH configuration.
 
 ## External services
 

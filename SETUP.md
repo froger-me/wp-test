@@ -179,6 +179,22 @@ ddev wp core install \
 
 ### Option B: import an existing database
 
+For a repeatable refresh after initial setup, copy the ignored local configuration:
+
+```bash
+cp .test-tools/db-refresh-config-example.php .test-tools/db-refresh.local.php
+```
+
+Edit the copied file with an existing SSH alias, the absolute remote WordPress path, the remote URL, and the local DDEV URL. Keep authentication in the user's SSH configuration. Then run:
+
+```bash
+composer db:pull
+```
+
+The command shows the exact source and destination and requires typed confirmation. It downloads and verifies a compressed export, creates an automatic local snapshot, imports into `db`, and safely replaces the URL inside serialized WordPress data. If the import or replacement fails, it attempts to restore the snapshot. Use `composer db:pull -- --yes` only for deliberate non-interactive use.
+
+The equivalent manual process is:
+
 Export through an existing SSH alias:
 
 ```bash
@@ -212,6 +228,17 @@ Create a working restore point:
 ```bash
 ddev snapshot --name=initial-working-local
 ```
+
+The toolkit also provides explicit local maintenance commands:
+
+```bash
+composer snapshot
+composer snapshot -- descriptive-name
+composer restore -- descriptive-name
+composer reset:tests
+```
+
+`snapshot` creates a dated name when none is supplied. A DDEV snapshot contains every project database. `restore` therefore requires confirmation and can replace both `db` and `wp_tests`. `reset:tests` requires separate confirmation and permanently recreates only `wp_tests`; it never changes `db`. Both destructive commands accept `--yes` after `--` for deliberate non-interactive use.
 
 ## 7. Create the disposable test database
 

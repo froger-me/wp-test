@@ -18,6 +18,7 @@ See [SETUP.md](SETUP.md) for the complete installation guide.
 - Test uploads and runtime links live under `.test-tools/runtime/`, not the working `wp-content`.
 - Destructive tests are excluded from the default run.
 - Logging commands operate only on the local `wp-content/debug.log` file after validating the DDEV logging configuration.
+- Database replacement and snapshot restoration require typed confirmation, or an explicit `--yes` after the target has been reviewed.
 
 ## Public commands
 
@@ -31,6 +32,10 @@ composer lint:wpcs
 composer format:wpcs
 composer tail:log
 composer clear:log
+composer db:pull
+composer snapshot
+composer restore -- snapshot-name
+composer reset:tests
 composer test
 composer test:php
 composer test:harness
@@ -52,6 +57,10 @@ composer lint:wpcs
 composer format:wpcs
 composer tail:log
 composer clear:log
+composer db:pull
+composer snapshot
+composer restore -- snapshot-name
+composer reset:tests
 composer test
 composer test:php
 composer test:harness
@@ -82,6 +91,40 @@ composer test:php -- --order-by=random --random-order-seed=12345
 `composer test:coverage` requires Xdebug or PCOV to be loaded explicitly. With DDEV Xdebug, run `ddev xdebug on` first and `ddev xdebug off` afterward. The toolkit forces `XDEBUG_MODE=off` for Doctor, WP-CLI, manifest generation, and other preparation processes, then enables `XDEBUG_MODE=coverage` only for the final PHPUnit process. A coverage-only self-check verifies the requested driver; normal runs exclude that check rather than reporting it as skipped. Coverage is written to `.test-tools/coverage/`.
 
 `composer test:junit` writes `.test-tools/runtime/junit.xml`.
+
+## Database refresh, snapshots, and reset
+
+`composer db:pull` replaces only the local working database `db` from a remote WordPress installation. Copy `.test-tools/db-refresh-config-example.php` to `.test-tools/db-refresh.local.php` and provide an SSH alias, the absolute remote WordPress path, the remote URL, and the local URL. The local file is ignored by Git. The SSH alias must obtain its connection details from the user's SSH configuration; do not put passwords or private keys in either file.
+
+The refresh command requires confirmation. It streams a compressed export over SSH with a one-gigabyte packet limit, verifies the compressed archive, and creates a named local DDEV snapshot before importing. WordPress then replaces the configured URL in serialized values as well as plain text. The command refuses to continue unless the configured local URL, the WordPress site URL, and the running DDEV project use the same host name. If importing or URL replacement fails, it attempts to restore the automatic snapshot.
+
+```bash
+composer db:pull
+# For deliberate non-interactive use after reviewing the configuration:
+composer db:pull -- --yes
+```
+
+The downloaded archive remains in the ignored `.test-tools/runtime/db-pulls/` directory for inspection. The successful command prints the automatic snapshot name.
+
+Create and restore local DDEV database snapshots explicitly:
+
+```bash
+composer snapshot                         # generates a dated name
+composer snapshot -- before-plugin-update
+composer restore -- before-plugin-update  # requires typed confirmation
+composer restore -- before-plugin-update --yes
+```
+
+A DDEV snapshot contains every database in this local project. Restoring one can therefore replace both `db` and `wp_tests` and may recreate DDEV's database container.
+
+Reset only the disposable PHPUnit database when its schema or data needs a clean start:
+
+```bash
+composer reset:tests          # requires typing: reset wp_tests
+composer reset:tests -- --yes
+```
+
+This permanently drops and recreates `wp_tests`. It uses fixed database names and does not alter the working WordPress database `db`.
 
 `composer test:e2e` runs Chromium against the local URL reported by the already-running DDEV project. Pass normal Playwright options after `--`:
 
