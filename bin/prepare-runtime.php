@@ -4,7 +4,6 @@
  *
  * @package AnyapeWPTestTools
  */
-
 declare(strict_types=1);
 
 use AnyapeWPTestTools\Manifest;
@@ -16,34 +15,11 @@ $content_root              = $runtime_root . '/wp-content';
 
 require $anyape_wp_test_tools_root . '/vendor/autoload.php';
 require $anyape_wp_test_tools_root . '/autoload.php';
+require_once __DIR__ . '/file-tools.php';
 
 $manifest = Manifest::from_file( $runtime_root . '/manifest.json' );
 
-$remove_tree = static function ( string $tree_path ) use ( &$remove_tree ): void {
-	if ( is_link( $tree_path ) || is_file( $tree_path ) ) {
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- WordPress is not loaded; this removes only the isolated runtime tree.
-		unlink( $tree_path );
-		return;
-	}
-
-	if ( ! is_dir( $tree_path ) ) {
-		return;
-	}
-
-	$entries = scandir( $tree_path );
-	foreach ( false !== $entries ? $entries : array() as $entry ) {
-		if ( '.' === $entry || '..' === $entry ) {
-			continue;
-		}
-
-		$remove_tree( $tree_path . '/' . $entry );
-	}
-
-	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- WordPress is not loaded; this removes only the isolated runtime tree.
-	rmdir( $tree_path );
-};
-
-$remove_tree( $content_root );
+anyape_wp_test_tools_remove_path( $content_root );
 
 foreach ( array( 'plugins', 'mu-plugins', 'themes', 'uploads' ) as $directory ) {
 	$runtime_directory = $content_root . '/' . $directory;
