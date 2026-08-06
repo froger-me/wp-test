@@ -23,10 +23,9 @@ if ( null === $name || 1 !== preg_match( '/^[A-Za-z0-9][A-Za-z0-9_-]*$/', $name 
 	exit( 1 );
 }
 
-$project_tld = anyape_wp_test_tools_ddev_scalar( $configuration, 'project_tld' ) ?? 'ddev.site';
-if ( 1 !== preg_match( '/^[A-Za-z0-9.-]+$/', $project_tld ) ) {
-	fwrite( STDERR, "ERROR: Could not read the project domain suffix from .ddev/config.yaml.\n" );
-	exit( 1 );
+$project_tld = anyape_wp_test_tools_ddev_scalar( $configuration, 'project_tld' );
+if ( null === $project_tld || 1 !== preg_match( '/^[A-Za-z0-9.-]+$/', $project_tld ) ) {
+	$project_tld = 'ddev.site';
 }
 
 $host = $name . '.' . trim( $project_tld, '.' );
