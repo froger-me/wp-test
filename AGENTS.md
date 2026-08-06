@@ -301,6 +301,28 @@ Document structure:
 
 Do not present planned commands as current features.
 
+## Planning and implementation rules
+
+When writing plans:
+- include a list of files to create (if any)
+- include a list of files to update (if any)
+- include a list of files to delete (if any)
+- always include critical code snippets
+- always include concrete architecture description
+- always include acceptance criteria and exit conditions
+- plan with decisions, not options: be actionable without room for undesired improvisation
+- focus your writing on what is to be done, not for what is not to be done, unless to guard against unwanted side effects
+- DO NOT change to the domain related data described in `data-model.md` unless asked to do so specifically by the user
+- DO NOT change the content of `data-model.md` unless asked to do so specifically by the user
+- DO NOT rewrite the complete plan file unless explicitly asked to
+
+When following plans:
+- read it entirely
+- don't deviate
+- DO NOT implement and warn the user if you find inconsistencies in the plan before implementation
+- STOP implementing and warn the user if you find inconsistencies in the plan during implementation
+- make sure to clean up your code base
+
 ## Validation
 
 For PHP or shell changes, perform at least:
