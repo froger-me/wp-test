@@ -4,6 +4,7 @@
  *
  * @package AnyapeWPTestTools
  */
+
 declare(strict_types=1);
 
 // phpcs:disable WordPress.WP.AlternativeFunctions -- These tests exercise standalone host files in private temporary directories.
@@ -204,12 +205,13 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$root = $this->create_wordpress_project( 'shell-report' );
 		$this->write_ddev_config( $root, array( 'name' => 'project with spaces' ), array( 'git', 'subversion' ) );
 		file_put_contents( $root . '/wp-config-ddev.php', "<?php\n" );
-		$report = anyape_wp_test_tools_inspect_setup( $root );
-
-		ob_start();
-		anyape_wp_test_tools_write_setup_shell_report( $report );
-		$output = (string) ob_get_clean();
-		$parts  = explode( "\0", $output );
+		$result = $this->run_command(
+			array( PHP_BINARY, dirname( __DIR__ ) . '/bin/inspect-setup.php', '--shell', $root ),
+			dirname( __DIR__ ),
+			array()
+		);
+		$this->assertSame( 0, $result['status'], $result['stderr'] );
+		$parts = explode( "\0", $result['stdout'] );
 		array_pop( $parts );
 		$this->assertSame( 0, count( $parts ) % 2 );
 		$values = array();
