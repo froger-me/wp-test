@@ -4,6 +4,7 @@
  *
  * @package AnyapeWPTestTools
  */
+
 declare(strict_types=1);
 
 use AnyapeWPTestTools\Manifest;
