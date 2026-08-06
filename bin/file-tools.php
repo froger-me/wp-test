@@ -245,6 +245,7 @@ function anyape_wp_test_tools_path_digest( string $path ): string {
 			if ( '.' !== $item && '..' !== $item ) {
 				$walk( $current . '/' . $item, '' === $relative ? $item : $relative . '/' . $item );
 			}
+		}
 	};
 
 	$walk( $path, '' );
