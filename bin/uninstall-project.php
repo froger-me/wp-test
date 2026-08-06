@@ -257,8 +257,6 @@ function anyape_wp_test_tools_uninstall_project_files( string $project_root, str
 	return array(
 		'wp_config_restored'    => true,
 		'root_composer_removed' => $remove_root_composer,
-		'gitignore_present'     => is_file( $gitignore ),
-		'sftp_present'          => is_file( $sftp ),
 	);
 }
 
