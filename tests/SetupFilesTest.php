@@ -205,6 +205,27 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$this->assertLessThan( $self_delete, $change_check );
 	}
 
+	/** Guided setup creates the required DDEV settings before adapting WordPress. */
+	public function test_guided_setup_owns_the_initial_ddev_configuration(): void {
+		$script          = (string) file_get_contents( dirname( __DIR__ ) . '/setup-host.sh' );
+		$ddev_config     = strpos( $script, 'anyape_wp_test_tools_run_logged "Creating the local DDEV settings..." ddev config' );
+		$wp_config       = strpos( $script, 'bin/update-wp-config.php' );
+		$required_values = array(
+			'--project-name="$DDEV_PROJECT_NAME"',
+			'--project-type=wordpress',
+			'--docroot=.',
+			'--webserver-type=apache-fpm',
+		);
+
+		$this->assertNotFalse( $ddev_config );
+		$this->assertNotFalse( $wp_config );
+		$this->assertLessThan( $wp_config, $ddev_config );
+		foreach ( $required_values as $required_value ) {
+			$this->assertStringContainsString( $required_value, $script );
+		}
+		$this->assertStringNotContainsString( "Run 'ddev config", $script );
+	}
+
 	/** A command-name conflict is refused without replacing site work. */
 	public function test_root_composer_command_conflict_is_refused(): void {
 		$root     = $this->copy_fixture( 'composer/conflict.json', 'composer.json' );

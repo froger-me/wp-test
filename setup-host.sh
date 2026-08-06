@@ -45,7 +45,44 @@ trap cleanup_setup_report EXIT INT TERM HUP
 # shellcheck disable=SC1091
 source "$ANYAPE_WP_TEST_TOOLS_DIR/logging-host.sh"
 
-php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/inspect-setup.php" "$PROJECT_ROOT" > "$REPORT_FILE"
+refresh_setup_report() {
+	php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/inspect-setup.php" "$PROJECT_ROOT" > "$REPORT_FILE"
+}
+
+suggest_ddev_project_name() {
+	local suggested_name
+	suggested_name="$(basename "$PROJECT_ROOT" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+	printf '%s' "${suggested_name:-wordpress-project}"
+}
+
+configured_ddev_project_name() {
+	php -r '
+		$configuration = (string) file_get_contents($argv[1]);
+		if (preg_match("/^name:\\s*[\047\"]?([A-Za-z0-9][A-Za-z0-9_-]*)[\047\"]?\\s*(?:#.*)?$/m", $configuration, $match) !== 1) {
+			exit(1);
+		}
+		echo $match[1];
+	' "$PROJECT_ROOT/.ddev/config.yaml"
+}
+
+ddev_configuration_ready() {
+	[[ -f "$PROJECT_ROOT/.ddev/config.yaml" && -f "$PROJECT_ROOT/wp-config-ddev.php" ]] || return 1
+	php -r '
+		$configuration = (string) file_get_contents($argv[1]);
+		$required = array(
+			"/^type:\\s*[\047\"]?wordpress[\047\"]?\\s*(?:#.*)?$/m",
+			"/^docroot:\\s*[\047\"]?\\.[\047\"]?\\s*(?:#.*)?$/m",
+			"/^webserver_type:\\s*[\047\"]?apache-fpm[\047\"]?\\s*(?:#.*)?$/m",
+		);
+		foreach ($required as $pattern) {
+			if (preg_match($pattern, $configuration) !== 1) {
+				exit(1);
+			}
+		}
+	' "$PROJECT_ROOT/.ddev/config.yaml"
+}
+
+refresh_setup_report
 
 report_value() {
 	php -r '$data=json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR); $value=$data[$argv[2]] ?? null; if (is_bool($value)) { echo $value ? "1" : "0"; } elseif (is_array($value)) { echo implode(",", $value); } elseif ($value !== null) { echo $value; }' "$REPORT_FILE" "$1"
@@ -132,9 +169,68 @@ if [[ "$(report_value wordpress_valid)" != "1" ]]; then
 	echo "ERROR: This is not a complete WordPress directory. Missing: $(report_value missing_paths)" >&2
 	exit 1
 fi
-if [[ "$(report_value ddev_config_exists)" != "1" || "$(report_value ddev_wordpress_exists)" != "1" ]]; then
-	echo "ERROR: Run 'ddev config --project-type=wordpress --docroot=.' before guided setup. The .ddev/config.yaml and wp-config-ddev.php files are required." >&2
-	exit 1
+
+if ((!CHECK_ONLY)); then
+	export ANYAPE_WP_TEST_TOOLS_VERBOSE="$VERBOSE"
+	anyape_wp_test_tools_log_initialize "$ANYAPE_WP_TEST_TOOLS_DIR" setup
+	if ((VERBOSE)); then
+		echo "Detailed command output will be shown and saved to: $ANYAPE_WP_TEST_TOOLS_LOG_FILE"
+	else
+		echo "Detailed command output will be saved to: $ANYAPE_WP_TEST_TOOLS_LOG_FILE"
+		echo "Run setup with -v or --verbose to show those details while it runs."
+	fi
+fi
+
+if ! ddev_configuration_ready; then
+	if ((CHECK_ONLY)); then
+		DDEV_CONFIGURATION_DESCRIPTION="needs a guided change"
+	else
+		print_step "Create the local DDEV settings"
+		if [[ -f "$PROJECT_ROOT/.ddev/config.yaml" ]]; then
+			if ! DDEV_PROJECT_NAME="$(configured_ddev_project_name)"; then
+				echo "ERROR: Could not read the existing DDEV project name." >&2
+				exit 1
+			fi
+			echo "The existing DDEV settings do not yet use the required WordPress, current-directory document root, and Apache PHP server values."
+			echo "The project name '$DDEV_PROJECT_NAME' and unrelated DDEV settings will be kept."
+		else
+			DDEV_PROJECT_NAME="$(suggest_ddev_project_name)"
+			echo "DDEV needs a local project name. The suggested name comes from the WordPress directory name."
+			echo "Press Enter to accept it, or type a different lowercase name using letters, numbers, and hyphens."
+			echo
+			if ((!YES)); then
+				printf 'Local DDEV project name [%s]: ' "$DDEV_PROJECT_NAME"
+				IFS= read -r requested_ddev_project_name
+				DDEV_PROJECT_NAME="${requested_ddev_project_name:-$DDEV_PROJECT_NAME}"
+			fi
+		fi
+		if [[ ! "$DDEV_PROJECT_NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+			echo "ERROR: The DDEV project name must start with a lowercase letter or number and contain only lowercase letters, numbers, and hyphens." >&2
+			exit 1
+		fi
+		echo
+		echo "Setup will configure this WordPress directory as the DDEV document root and use the Apache PHP server."
+		if ! confirm_change "Create or update the local DDEV settings now?"; then
+			echo "ERROR: DDEV settings are required to continue setup." >&2
+			exit 1
+		fi
+		(
+			cd "$PROJECT_ROOT"
+			anyape_wp_test_tools_run_logged "Creating the local DDEV settings..." ddev config \
+				--project-name="$DDEV_PROJECT_NAME" \
+				--project-type=wordpress \
+				--docroot=. \
+				--webserver-type=apache-fpm
+		)
+		refresh_setup_report
+		if ! ddev_configuration_ready; then
+			echo "ERROR: DDEV did not create the required .ddev/config.yaml and wp-config-ddev.php settings." >&2
+			exit 1
+		fi
+		DDEV_CONFIGURATION_DESCRIPTION="ready"
+	fi
+else
+	DDEV_CONFIGURATION_DESCRIPTION="ready"
 fi
 
 WP_CONFIG_STATUS="$(php -r '$d=json_decode(file_get_contents($argv[1]),true); echo $d["wp_config"]["status"];' "$REPORT_FILE")"
@@ -145,6 +241,7 @@ case "$WP_CONFIG_STATUS" in
 	*) WP_CONFIG_DESCRIPTION="unknown state" ;;
 esac
 print_step "Current project state"
+echo "DDEV settings: $DDEV_CONFIGURATION_DESCRIPTION"
 echo "WordPress settings (wp-config.php): $WP_CONFIG_DESCRIPTION"
 echo "Subversion program inside DDEV: $([[ "$(report_value subversion_configured)" == "1" ]] && echo configured || echo missing)"
 echo "Project composer.json: $([[ "$(report_value root_composer_exists)" == "1" ]] && echo present || echo missing)"
@@ -153,6 +250,11 @@ echo "File-upload settings (.vscode/sftp.json): $([[ "$(report_value sftp_config
 
 if ((CHECK_ONLY)); then
 	print_step "Read-only check"
+	if [[ "$DDEV_CONFIGURATION_DESCRIPTION" == "ready" ]]; then
+		echo "Complete: DDEV uses the WordPress, current-directory document root, and Apache PHP server settings."
+	else
+		echo "Pending: guided setup will create or update DDEV with a suggested project name, WordPress type, current-directory document root, and Apache PHP server."
+	fi
 	check_file_update "WordPress settings need a guided change." "WordPress settings are ready for local DDEV use." php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-wp-config.php" --check "$PROJECT_ROOT/wp-config.php"
 	check_file_update "project composer.json needs the test commands." "project composer.json has the current test commands." php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-root-composer.php" --check "$PROJECT_ROOT/composer.json" "$ANYAPE_WP_TEST_TOOLS_DIR/composer.json"
 	if [[ "$(report_value git_mode)" == "parent" ]]; then
@@ -163,15 +265,6 @@ if ((CHECK_ONLY)); then
 	fi
 	echo "Check complete; no files, packages, services, or databases were changed."
 	exit 0
-fi
-
-export ANYAPE_WP_TEST_TOOLS_VERBOSE="$VERBOSE"
-anyape_wp_test_tools_log_initialize "$ANYAPE_WP_TEST_TOOLS_DIR" setup
-if ((VERBOSE)); then
-	echo "Detailed command output will be shown and saved to: $ANYAPE_WP_TEST_TOOLS_LOG_FILE"
-else
-	echo "Detailed command output will be saved to: $ANYAPE_WP_TEST_TOOLS_LOG_FILE"
-	echo "Run setup with -v or --verbose to show those details while it runs."
 fi
 
 if [[ "$WP_CONFIG_STATUS" == "manual" ]]; then

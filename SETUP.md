@@ -52,21 +52,16 @@ node --version
 npm --version
 ```
 
-## Create the basic DDEV files
+## Let guided setup create the basic DDEV files
 
-Run this from the directory containing `wp-admin`, `wp-content`, `wp-includes`, and `wp-config.php`:
+Do not run a separate initial `ddev config` command. Guided setup suggests a project name from the WordPress directory name and lets you accept it or type another lowercase name. It then creates `.ddev/config.yaml` and `wp-config-ddev.php` with these settings:
 
-```bash
-ddev config \
-  --project-name=your-project-name \
-  --project-type=wordpress \
-  --docroot=. \
-  --webserver-type=apache-fpm
-```
+- the chosen local project name;
+- WordPress project type;
+- the current directory as the document root; and
+- the Apache PHP server.
 
-This creates `.ddev/config.yaml` and `wp-config-ddev.php`.
-
-Choose different PHP or database versions only when the project requires them:
+After guided setup, choose different PHP or database versions only when the project requires them:
 
 ```bash
 ddev config --php-version=8.4 --database=mariadb:11.8
@@ -420,7 +415,7 @@ The file was not changed. Use the manual arrangement above, run `php -l wp-confi
 
 ### DDEV files are missing
 
-Run the initial `ddev config` command from the WordPress root. Guided setup requires both `.ddev/config.yaml` and `wp-config-ddev.php`.
+Run guided setup again. It creates `.ddev/config.yaml` and `wp-config-ddev.php` itself, or reports the pending change when run with `--check`.
 
 ### DDEV is stopped later
 

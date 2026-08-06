@@ -29,15 +29,9 @@ You do not need to understand the later sections before running `composer test`.
 
 ## Quick setup
 
-Install Docker, DDEV, Git, Composer, Node.js, and npm. Run the initial DDEV configuration in the WordPress directory, then clone Anyape WP Test Tools:
+Install Docker, DDEV, Git, Composer, Node.js, and npm. Clone Anyape WP Test Tools into the WordPress directory:
 
 ```bash
-ddev config \
-  --project-name=your-project-name \
-  --project-type=wordpress \
-  --docroot=. \
-  --webserver-type=apache-fpm
-
 git clone https://github.com/anyape/anyape-wp-test-tools.git .anyape-wp-test-tools
 ```
 
@@ -53,7 +47,7 @@ When the report looks right, run it:
 bash .anyape-wp-test-tools/setup-host.sh
 ```
 
-It can adapt a standard `wp-config.php`, install the required packages and browser, prepare the test database, add the root Composer commands, and run the first checks. It creates backups before editing and refuses files it cannot understand safely.
+It suggests a DDEV project name from the WordPress directory name, creates the DDEV settings, adapts a standard `wp-config.php`, installs the required packages and browser, prepares the test database, adds the root Composer commands, and runs the first checks. You may accept the suggested project name or type another one. It creates backups before editing and refuses files it cannot understand safely.
 
 Once setup is complete, the same command is available as:
 
