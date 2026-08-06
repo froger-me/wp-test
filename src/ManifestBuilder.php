@@ -391,26 +391,28 @@ final class ManifestBuilder {
 	 * @return list<array<string, mixed>>
 	 */
 	private function deduplicate_extensions( array $extensions ): array {
-		$result = array();
-		$seen   = array();
+		$result    = array();
+		$positions = array();
+
 		foreach ( $extensions as $extension ) {
 			$key = (string) $extension['type'] . ':' . (string) $extension['slug'];
-			if ( isset( $seen[ $key ] ) ) {
+
+			if ( isset( $positions[ $key ] ) ) {
+				$index = $positions[ $key ];
+
 				if ( ! empty( $extension['tests_enabled'] ) ) {
-					foreach ( $result as &$existing ) {
-						if ( (string) $existing['type'] === (string) $extension['type'] && (string) $existing['slug'] === (string) $extension['slug'] ) {
-							$existing['tests_enabled'] = true;
-							$existing['tests_path']    = $extension['tests_path'];
-							$existing['bootstrap']     = $extension['bootstrap'];
-						}
-					}
-					unset( $existing );
+					$result[ $index ]['tests_enabled'] = true;
+					$result[ $index ]['tests_path']    = $extension['tests_path'];
+					$result[ $index ]['bootstrap']     = $extension['bootstrap'];
 				}
+
 				continue;
 			}
-			$seen[ $key ] = true;
-			$result[]     = $extension;
+
+			$positions[ $key ] = count( $result );
+			$result[]          = $extension;
 		}
+
 		return $result;
 	}
 
