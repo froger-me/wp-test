@@ -51,8 +51,6 @@ function anyape_wp_test_tools_inspect_setup( string $project_root ): array {
 		$git_mode = 'parent';
 	}
 
-	$composer_path = $project_root . '/composer.json';
-
 	return array(
 		'wordpress_valid'       => array() === $missing,
 		'missing_paths'         => $missing,
@@ -64,7 +62,7 @@ function anyape_wp_test_tools_inspect_setup( string $project_root ): array {
 		'ddev_webserver_type'   => $ddev_webserver,
 		'ddev_packages'         => $ddev_packages,
 		'subversion_configured' => in_array( 'subversion', $ddev_packages, true ),
-		'root_composer_exists'  => is_file( $composer_path ),
+		'root_composer_exists'  => is_file( $project_root . '/composer.json' ),
 		'root_gitignore_exists' => is_file( $project_root . '/.gitignore' ),
 		'git_mode'              => $git_mode,
 		'sftp_config_exists'    => is_file( $project_root . '/.vscode/sftp.json' ),
@@ -190,32 +188,29 @@ function anyape_wp_test_tools_inspect_wp_config( string $contents ): array {
 }
 
 /**
- * Write the setup report as shell-safe null-delimited name and value pairs.
+ * Write the setup values in the fixed order consumed by setup-host.sh.
  *
  * @param array<string, mixed> $report Setup inspection report.
  */
 function anyape_wp_test_tools_write_setup_shell_report( array $report ): void {
-	$wp_config    = is_array( $report['wp_config'] ?? null ) ? $report['wp_config'] : array();
-	$shell_values = array(
-		'wordpress_valid'       => ! empty( $report['wordpress_valid'] ) ? '1' : '0',
-		'missing_paths'         => implode( ',', (array) ( $report['missing_paths'] ?? array() ) ),
-		'wp_config_status'      => (string) ( $wp_config['status'] ?? '' ),
-		'wp_config_reasons'     => implode( "\n", (array) ( $wp_config['reasons'] ?? array() ) ),
-		'ddev_ready'            => ! empty( $report['ddev_ready'] ) ? '1' : '0',
-		'ddev_project_name'     => (string) ( $report['ddev_project_name'] ?? '' ),
-		'ddev_project_type'     => (string) ( $report['ddev_project_type'] ?? '' ),
-		'ddev_docroot'          => (string) ( $report['ddev_docroot'] ?? '' ),
-		'ddev_webserver_type'   => (string) ( $report['ddev_webserver_type'] ?? '' ),
-		'ddev_packages'         => implode( ',', (array) ( $report['ddev_packages'] ?? array() ) ),
-		'subversion_configured' => ! empty( $report['subversion_configured'] ) ? '1' : '0',
-		'root_composer_exists'  => ! empty( $report['root_composer_exists'] ) ? '1' : '0',
-		'root_gitignore_exists' => ! empty( $report['root_gitignore_exists'] ) ? '1' : '0',
-		'git_mode'              => (string) ( $report['git_mode'] ?? '' ),
-		'sftp_config_exists'    => ! empty( $report['sftp_config_exists'] ) ? '1' : '0',
+	$wp_config = is_array( $report['wp_config'] ?? null ) ? $report['wp_config'] : array();
+	$values    = array(
+		! empty( $report['wordpress_valid'] ) ? '1' : '0',
+		implode( ',', (array) ( $report['missing_paths'] ?? array() ) ),
+		(string) ( $wp_config['status'] ?? '' ),
+		implode( "\n", (array) ( $wp_config['reasons'] ?? array() ) ),
+		! empty( $report['ddev_ready'] ) ? '1' : '0',
+		(string) ( $report['ddev_project_name'] ?? '' ),
+		implode( ',', (array) ( $report['ddev_packages'] ?? array() ) ),
+		! empty( $report['subversion_configured'] ) ? '1' : '0',
+		! empty( $report['root_composer_exists'] ) ? '1' : '0',
+		! empty( $report['root_gitignore_exists'] ) ? '1' : '0',
+		(string) ( $report['git_mode'] ?? '' ),
+		! empty( $report['sftp_config_exists'] ) ? '1' : '0',
 	);
 
-	foreach ( $shell_values as $name => $value ) {
-		fwrite( STDOUT, $name . "\0" . $value . "\0" );
+	foreach ( $values as $value ) {
+		fwrite( STDOUT, $value . "\0" );
 	}
 }
 
