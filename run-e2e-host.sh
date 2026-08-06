@@ -77,6 +77,7 @@ SNAPSHOT_CREATED=0
 RESTORE_FAILED=0
 
 verify_restored_database() {
+	rm -f "$RUN_DIR/database-after.sql"
 	if ! ddev export-db --database=db --gzip=false --file="$RUN_DIR/database-after.sql"; then
 		echo "ERROR: Could not export the restored working database for verification." >&2
 		return 1
