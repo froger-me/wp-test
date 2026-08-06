@@ -32,60 +32,124 @@ for command_name in php ddev composer node npm git; do
 	fi
 done
 
-REPORT_FILE="$(mktemp "${TMPDIR:-/tmp}/anyape-wp-test-tools-setup.XXXXXX")"
-cleanup_setup_report() {
-	local status=$?
-	rm -f "$REPORT_FILE"
-	anyape_wp_test_tools_report_log
-	return "$status"
-}
-trap cleanup_setup_report EXIT INT TERM HUP
-
 # The path is resolved from this script's directory.
 # shellcheck disable=SC1091
 source "$ANYAPE_WP_TEST_TOOLS_DIR/logging-host.sh"
 
-refresh_setup_report() {
-	php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/inspect-setup.php" "$PROJECT_ROOT" > "$REPORT_FILE"
+cleanup_setup() {
+	local status=$?
+	anyape_wp_test_tools_report_log
+	return "$status"
+}
+trap cleanup_setup EXIT INT TERM HUP
+
+SETUP_WORDPRESS_VALID=""
+SETUP_MISSING_PATHS=""
+SETUP_WP_CONFIG_STATUS=""
+SETUP_WP_CONFIG_REASONS=""
+SETUP_DDEV_READY=""
+SETUP_DDEV_PROJECT_NAME=""
+SETUP_DDEV_PROJECT_TYPE=""
+SETUP_DDEV_DOCROOT=""
+SETUP_DDEV_WEBSERVER_TYPE=""
+SETUP_DDEV_PACKAGES=""
+SETUP_SUBVERSION_CONFIGURED=""
+SETUP_ROOT_COMPOSER_EXISTS=""
+SETUP_ROOT_GITIGNORE_EXISTS=""
+SETUP_GIT_MODE=""
+SETUP_SFTP_CONFIG_EXISTS=""
+
+load_setup_state() {
+	local name
+	local value
+	local missing_field=""
+	local seen_wordpress_valid=0
+	local seen_missing_paths=0
+	local seen_wp_config_status=0
+	local seen_wp_config_reasons=0
+	local seen_ddev_ready=0
+	local seen_ddev_project_name=0
+	local seen_ddev_project_type=0
+	local seen_ddev_docroot=0
+	local seen_ddev_webserver_type=0
+	local seen_ddev_packages=0
+	local seen_subversion_configured=0
+	local seen_root_composer_exists=0
+	local seen_root_gitignore_exists=0
+	local seen_git_mode=0
+	local seen_sftp_config_exists=0
+
+	SETUP_WORDPRESS_VALID=""
+	SETUP_MISSING_PATHS=""
+	SETUP_WP_CONFIG_STATUS=""
+	SETUP_WP_CONFIG_REASONS=""
+	SETUP_DDEV_READY=""
+	SETUP_DDEV_PROJECT_NAME=""
+	SETUP_DDEV_PROJECT_TYPE=""
+	SETUP_DDEV_DOCROOT=""
+	SETUP_DDEV_WEBSERVER_TYPE=""
+	SETUP_DDEV_PACKAGES=""
+	SETUP_SUBVERSION_CONFIGURED=""
+	SETUP_ROOT_COMPOSER_EXISTS=""
+	SETUP_ROOT_GITIGNORE_EXISTS=""
+	SETUP_GIT_MODE=""
+	SETUP_SFTP_CONFIG_EXISTS=""
+
+	while IFS= read -r -d '' name && IFS= read -r -d '' value; do
+		case "$name" in
+			wordpress_valid) SETUP_WORDPRESS_VALID="$value"; seen_wordpress_valid=1 ;;
+			missing_paths) SETUP_MISSING_PATHS="$value"; seen_missing_paths=1 ;;
+			wp_config_status) SETUP_WP_CONFIG_STATUS="$value"; seen_wp_config_status=1 ;;
+			wp_config_reasons) SETUP_WP_CONFIG_REASONS="$value"; seen_wp_config_reasons=1 ;;
+			ddev_ready) SETUP_DDEV_READY="$value"; seen_ddev_ready=1 ;;
+			ddev_project_name) SETUP_DDEV_PROJECT_NAME="$value"; seen_ddev_project_name=1 ;;
+			ddev_project_type) SETUP_DDEV_PROJECT_TYPE="$value"; seen_ddev_project_type=1 ;;
+			ddev_docroot) SETUP_DDEV_DOCROOT="$value"; seen_ddev_docroot=1 ;;
+			ddev_webserver_type) SETUP_DDEV_WEBSERVER_TYPE="$value"; seen_ddev_webserver_type=1 ;;
+			ddev_packages) SETUP_DDEV_PACKAGES="$value"; seen_ddev_packages=1 ;;
+			subversion_configured) SETUP_SUBVERSION_CONFIGURED="$value"; seen_subversion_configured=1 ;;
+			root_composer_exists) SETUP_ROOT_COMPOSER_EXISTS="$value"; seen_root_composer_exists=1 ;;
+			root_gitignore_exists) SETUP_ROOT_GITIGNORE_EXISTS="$value"; seen_root_gitignore_exists=1 ;;
+			git_mode) SETUP_GIT_MODE="$value"; seen_git_mode=1 ;;
+			sftp_config_exists) SETUP_SFTP_CONFIG_EXISTS="$value"; seen_sftp_config_exists=1 ;;
+			*)
+				echo "ERROR: Unknown setup inspection field '$name'." >&2
+				return 1
+				;;
+		esac
+	done < <(
+		php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/inspect-setup.php" \
+			--shell \
+			"$PROJECT_ROOT"
+	)
+
+	for missing_field in \
+		"wordpress_valid:$seen_wordpress_valid" \
+		"missing_paths:$seen_missing_paths" \
+		"wp_config_status:$seen_wp_config_status" \
+		"wp_config_reasons:$seen_wp_config_reasons" \
+		"ddev_ready:$seen_ddev_ready" \
+		"ddev_project_name:$seen_ddev_project_name" \
+		"ddev_project_type:$seen_ddev_project_type" \
+		"ddev_docroot:$seen_ddev_docroot" \
+		"ddev_webserver_type:$seen_ddev_webserver_type" \
+		"ddev_packages:$seen_ddev_packages" \
+		"subversion_configured:$seen_subversion_configured" \
+		"root_composer_exists:$seen_root_composer_exists" \
+		"root_gitignore_exists:$seen_root_gitignore_exists" \
+		"git_mode:$seen_git_mode" \
+		"sftp_config_exists:$seen_sftp_config_exists"; do
+		if [[ "${missing_field#*:}" != "1" ]]; then
+			echo "ERROR: Setup inspection did not return required field '${missing_field%%:*}'." >&2
+			return 1
+		fi
+	done
 }
 
 suggest_ddev_project_name() {
 	local suggested_name
 	suggested_name="$(basename "$PROJECT_ROOT" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
 	printf '%s' "${suggested_name:-wordpress-project}"
-}
-
-configured_ddev_project_name() {
-	php -r '
-		$configuration = (string) file_get_contents($argv[1]);
-		if (preg_match("/^name:\\s*[\047\"]?([A-Za-z0-9][A-Za-z0-9_-]*)[\047\"]?\\s*(?:#.*)?$/m", $configuration, $match) !== 1) {
-			exit(1);
-		}
-		echo $match[1];
-	' "$PROJECT_ROOT/.ddev/config.yaml"
-}
-
-ddev_configuration_ready() {
-	[[ -f "$PROJECT_ROOT/.ddev/config.yaml" && -f "$PROJECT_ROOT/wp-config-ddev.php" ]] || return 1
-	php -r '
-		$configuration = (string) file_get_contents($argv[1]);
-		$required = array(
-			"/^type:\\s*[\047\"]?wordpress[\047\"]?\\s*(?:#.*)?$/m",
-			"/^docroot:\\s*[\047\"]?\\.[\047\"]?\\s*(?:#.*)?$/m",
-			"/^webserver_type:\\s*[\047\"]?apache-fpm[\047\"]?\\s*(?:#.*)?$/m",
-		);
-		foreach ($required as $pattern) {
-			if (preg_match($pattern, $configuration) !== 1) {
-				exit(1);
-			}
-		}
-	' "$PROJECT_ROOT/.ddev/config.yaml"
-}
-
-refresh_setup_report
-
-report_value() {
-	php -r '$data=json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR); $value=$data[$argv[2]] ?? null; if (is_bool($value)) { echo $value ? "1" : "0"; } elseif (is_array($value)) { echo implode(",", $value); } elseif ($value !== null) { echo $value; }' "$REPORT_FILE" "$1"
 }
 
 confirm_change() {
@@ -162,11 +226,13 @@ ddev_project_running() {
 	php -r '$data=json_decode($argv[1], true); $services=$data["raw"]["services"] ?? array(); exit((($services["web"]["status"] ?? "") === "running" && ($services["db"]["status"] ?? "") === "running") ? 0 : 1);' "$result"
 }
 
+load_setup_state
+
 echo "WordPress guided setup"
 echo "Project: $PROJECT_ROOT"
 
-if [[ "$(report_value wordpress_valid)" != "1" ]]; then
-	echo "ERROR: This is not a complete WordPress directory. Missing: $(report_value missing_paths)" >&2
+if [[ "$SETUP_WORDPRESS_VALID" != "1" ]]; then
+	echo "ERROR: This is not a complete WordPress directory. Missing: $SETUP_MISSING_PATHS" >&2
 	exit 1
 fi
 
@@ -183,13 +249,14 @@ if ((!CHECK_ONLY)); then
 	fi
 fi
 
-if ! ddev_configuration_ready; then
+if [[ "$SETUP_DDEV_READY" != "1" ]]; then
 	if ((CHECK_ONLY)); then
 		DDEV_CONFIGURATION_DESCRIPTION="needs a guided change"
 	else
 		print_step "Create the local DDEV settings"
 		if [[ -f "$PROJECT_ROOT/.ddev/config.yaml" ]]; then
-			if ! DDEV_PROJECT_NAME="$(configured_ddev_project_name)"; then
+			DDEV_PROJECT_NAME="$SETUP_DDEV_PROJECT_NAME"
+			if [[ -z "$DDEV_PROJECT_NAME" ]]; then
 				echo "ERROR: Could not read the existing DDEV project name." >&2
 				exit 1
 			fi
@@ -224,8 +291,8 @@ if ! ddev_configuration_ready; then
 				--docroot=. \
 				--webserver-type=apache-fpm
 		)
-		refresh_setup_report
-		if ! ddev_configuration_ready; then
+		load_setup_state
+		if [[ "$SETUP_DDEV_READY" != "1" ]]; then
 			echo "ERROR: DDEV did not create the required .ddev/config.yaml and wp-config-ddev.php settings." >&2
 			exit 1
 		fi
@@ -235,7 +302,7 @@ else
 	DDEV_CONFIGURATION_DESCRIPTION="ready"
 fi
 
-WP_CONFIG_STATUS="$(php -r '$d=json_decode(file_get_contents($argv[1]),true); echo $d["wp_config"]["status"];' "$REPORT_FILE")"
+WP_CONFIG_STATUS="$SETUP_WP_CONFIG_STATUS"
 case "$WP_CONFIG_STATUS" in
 	ready) WP_CONFIG_DESCRIPTION="ready for local DDEV use" ;;
 	update) WP_CONFIG_DESCRIPTION="needs a guided change" ;;
@@ -245,10 +312,10 @@ esac
 print_step "Current project state"
 echo "DDEV settings: $DDEV_CONFIGURATION_DESCRIPTION"
 echo "WordPress settings (wp-config.php): $WP_CONFIG_DESCRIPTION"
-echo "Subversion program inside DDEV: $([[ "$(report_value subversion_configured)" == "1" ]] && echo configured || echo missing)"
-echo "Project composer.json: $([[ "$(report_value root_composer_exists)" == "1" ]] && echo present || echo missing)"
-echo "Project .gitignore: $([[ "$(report_value root_gitignore_exists)" == "1" ]] && echo present || echo missing)"
-echo "File-upload settings (.vscode/sftp.json): $([[ "$(report_value sftp_config_exists)" == "1" ]] && echo present || echo absent)"
+echo "Subversion program inside DDEV: $([[ "$SETUP_SUBVERSION_CONFIGURED" == "1" ]] && echo configured || echo missing)"
+echo "Project composer.json: $([[ "$SETUP_ROOT_COMPOSER_EXISTS" == "1" ]] && echo present || echo missing)"
+echo "Project .gitignore: $([[ "$SETUP_ROOT_GITIGNORE_EXISTS" == "1" ]] && echo present || echo missing)"
+echo "File-upload settings (.vscode/sftp.json): $([[ "$SETUP_SFTP_CONFIG_EXISTS" == "1" ]] && echo present || echo absent)"
 
 if ((CHECK_ONLY)); then
 	print_step "Read-only check"
@@ -259,10 +326,10 @@ if ((CHECK_ONLY)); then
 	fi
 	check_file_update "WordPress settings need a guided change." "WordPress settings are ready for local DDEV use." php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-wp-config.php" --check "$PROJECT_ROOT/wp-config.php"
 	check_file_update "project composer.json needs the test commands." "project composer.json has the current test commands." php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-root-composer.php" --check "$PROJECT_ROOT/composer.json" "$ANYAPE_WP_TEST_TOOLS_DIR/composer.json"
-	if [[ "$(report_value git_mode)" == "parent" ]]; then
+	if [[ "$SETUP_GIT_MODE" == "parent" ]]; then
 		check_file_update "project .gitignore needs the local-only file names." "project .gitignore excludes the local-only file names." php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-ignore-files.php" --check "$PROJECT_ROOT" git
 	fi
-	if [[ "$(report_value sftp_config_exists)" == "1" ]]; then
+	if [[ "$SETUP_SFTP_CONFIG_EXISTS" == "1" ]]; then
 		check_file_update ".vscode/sftp.json needs the local-only upload exclusions." ".vscode/sftp.json excludes the local-only files from uploads." php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-ignore-files.php" --check "$PROJECT_ROOT" sftp
 	fi
 	echo "Check complete; no files, packages, services, or databases were changed."
@@ -270,14 +337,16 @@ if ((CHECK_ONLY)); then
 fi
 
 if [[ "$WP_CONFIG_STATUS" == "manual" ]]; then
-	php -r '$d=json_decode(file_get_contents($argv[1]),true); foreach ($d["wp_config"]["reasons"] as $reason) { fwrite(STDERR, "ERROR: {$reason}\n"); }' "$REPORT_FILE"
+	while IFS= read -r reason; do
+		[[ -z "$reason" ]] || echo "ERROR: $reason" >&2
+	done <<< "$SETUP_WP_CONFIG_REASONS"
 	echo "ERROR: wp-config.php was not changed. Follow the manual wp-config.php section in SETUP.md, then run setup again." >&2
 	exit 1
 fi
 
 print_step "Keep local-only files out of Git"
 
-if [[ "$(report_value git_mode)" == "parent" ]]; then
+if [[ "$SETUP_GIT_MODE" == "parent" ]]; then
 	GIT_IGNORE_UPDATE_NEEDED="$(file_update_needed php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-ignore-files.php" --check "$PROJECT_ROOT" git)"
 	if [[ "$GIT_IGNORE_UPDATE_NEEDED" != "1" ]]; then
 		echo "Complete: project .gitignore already has the local setup paths."
@@ -295,7 +364,7 @@ else
 	echo "Manual: this project is not inside a parent Git repository, so there is no project .gitignore to update."
 fi
 
-if [[ "$(report_value sftp_config_exists)" == "1" ]]; then
+if [[ "$SETUP_SFTP_CONFIG_EXISTS" == "1" ]]; then
 	print_step "Keep local-only files out of remote uploads"
 	SFTP_UPDATE_NEEDED="$(file_update_needed php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-ignore-files.php" --check "$PROJECT_ROOT" sftp)"
 	if [[ "$SFTP_UPDATE_NEEDED" != "1" ]]; then
@@ -360,7 +429,7 @@ SUBVERSION_SETTINGS_ADDED=0
 if ddev_project_running; then
 	DDEV_WAS_RUNNING=1
 fi
-if [[ "$(report_value subversion_configured)" != "1" ]]; then
+if [[ "$SETUP_SUBVERSION_CONFIGURED" != "1" ]]; then
 	echo "Required: the matching WordPress PHP test files are downloaded from WordPress's development repository with the Subversion program."
 	echo "Subversion is not included in this project's DDEV web container yet. Setup cannot prepare the PHP tests without it."
 	if ((DDEV_WAS_RUNNING)); then
@@ -370,7 +439,7 @@ if [[ "$(report_value subversion_configured)" != "1" ]]; then
 	fi
 	echo "This changes only the local DDEV environment. It does not change the remote site."
 	echo
-	EXISTING_PACKAGES="$(report_value ddev_packages)"
+	EXISTING_PACKAGES="$SETUP_DDEV_PACKAGES"
 	PACKAGES="${EXISTING_PACKAGES:+$EXISTING_PACKAGES,}subversion"
 	anyape_wp_test_tools_run_logged "Adding required Subversion support to the DDEV settings..." ddev config --webimage-extra-packages="$PACKAGES"
 	DDEV_RESTART_NEEDED="$DDEV_WAS_RUNNING"
@@ -557,7 +626,7 @@ case "$DATABASE_CHOICE" in
 				else
 					break
 				fi
-				done
+			done
 			umask 077
 			mkdir -p "$ANYAPE_WP_TEST_TOOLS_DIR/runtime"
 			ADMIN_PASSWORD_FILE="$(mktemp "$ANYAPE_WP_TEST_TOOLS_DIR/runtime/clean-admin-password.XXXXXX")"
