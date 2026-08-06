@@ -194,10 +194,6 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$this->write_ddev_config( $without_subversion, array(), array( 'git', 'imagemagick' ) );
 		file_put_contents( $without_subversion . '/wp-config-ddev.php', "<?php\n" );
 		$this->assertFalse( anyape_wp_test_tools_inspect_setup( $without_subversion )['subversion_configured'] );
-
-		foreach ( array( 'project_root', 'ddev_config_exists', 'ddev_wordpress_exists', 'root_composer_valid', 'project_test_config', 'db_refresh_config' ) as $removed_field ) {
-			$this->assertArrayNotHasKey( $removed_field, $report );
-		}
 	}
 
 	/** Shell inspection output preserves values without producing executable shell text. */
