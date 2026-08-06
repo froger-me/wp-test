@@ -63,15 +63,50 @@ final class ManifestTest extends IntegrationTestCase {
 		$method = new ReflectionMethod( ManifestBuilder::class, 'deduplicate_extensions' );
 		$method->setAccessible( true );
 		$extensions = array(
-			array( 'type' => 'plugin', 'slug' => 'alpha', 'tests_enabled' => false, 'tests_path' => null, 'bootstrap' => null ),
-			array( 'type' => 'theme', 'slug' => 'alpha', 'tests_enabled' => false, 'tests_path' => null, 'bootstrap' => null ),
-			array( 'type' => 'plugin', 'slug' => 'alpha', 'tests_enabled' => true, 'tests_path' => '/plugin-tests', 'bootstrap' => '/plugin-bootstrap.php' ),
-			array( 'type' => 'theme', 'slug' => 'alpha', 'tests_enabled' => true, 'tests_path' => '/theme-tests', 'bootstrap' => '/theme-bootstrap.php' ),
-			array( 'type' => 'plugin', 'slug' => 'beta', 'tests_enabled' => true, 'tests_path' => '/beta-tests', 'bootstrap' => null ),
+			array(
+				'type'          => 'plugin',
+				'slug'          => 'alpha',
+				'tests_enabled' => false,
+				'tests_path'    => null,
+				'bootstrap'     => null,
+			),
+			array(
+				'type'          => 'theme',
+				'slug'          => 'alpha',
+				'tests_enabled' => false,
+				'tests_path'    => null,
+				'bootstrap'     => null,
+			),
+			array(
+				'type'          => 'plugin',
+				'slug'          => 'alpha',
+				'tests_enabled' => true,
+				'tests_path'    => '/plugin-tests',
+				'bootstrap'     => '/plugin-bootstrap.php',
+			),
+			array(
+				'type'          => 'theme',
+				'slug'          => 'alpha',
+				'tests_enabled' => true,
+				'tests_path'    => '/theme-tests',
+				'bootstrap'     => '/theme-bootstrap.php',
+			),
+			array(
+				'type'          => 'plugin',
+				'slug'          => 'beta',
+				'tests_enabled' => true,
+				'tests_path'    => '/beta-tests',
+				'bootstrap'     => null,
+			),
 		);
 
 		$result = $method->invoke( new ManifestBuilder( '/project', '/tool' ), $extensions );
-		$this->assertSame( array( 'plugin:alpha', 'theme:alpha', 'plugin:beta' ), array_map( static fn ( array $item ): string => $item['type'] . ':' . $item['slug'], $result ) );
+		$keys   = array_map(
+			static fn ( array $item ): string => $item['type'] . ':' . $item['slug'],
+			$result
+		);
+
+		$this->assertSame( array( 'plugin:alpha', 'theme:alpha', 'plugin:beta' ), $keys );
 		$this->assertSame( '/plugin-tests', $result[0]['tests_path'] );
 		$this->assertSame( '/plugin-bootstrap.php', $result[0]['bootstrap'] );
 		$this->assertSame( '/theme-tests', $result[1]['tests_path'] );
