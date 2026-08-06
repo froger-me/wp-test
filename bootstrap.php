@@ -1,4 +1,9 @@
 <?php
+/**
+ * Bootstrap the WordPress integration test environment.
+ *
+ * @package WpTest
+ */
 
 declare(strict_types=1);
 
@@ -6,84 +11,88 @@ use WpTest\HttpMock;
 use WpTest\Lifecycle;
 use WpTest\Manifest;
 
-$toolkitRoot = __DIR__;
-$projectRoot = dirname(__DIR__);
-$testsDir    = $toolkitRoot . '/wordpress-tests-lib';
-$runtimeDir  = $toolkitRoot . '/runtime';
-$contentDir  = $runtimeDir . '/wp-content';
-$polyfills   = $toolkitRoot . '/vendor/yoast/phpunit-polyfills';
+$toolkit_root = __DIR__;
+$project_root = dirname( __DIR__ );
+$tests_dir    = $toolkit_root . '/wordpress-tests-lib';
+$runtime_dir  = $toolkit_root . '/runtime';
+$content_dir  = $runtime_dir . '/wp-content';
+$polyfills    = $toolkit_root . '/vendor/yoast/phpunit-polyfills';
 
-require $toolkitRoot . '/vendor/autoload.php';
-require $toolkitRoot . '/autoload.php';
+require $toolkit_root . '/vendor/autoload.php';
+require $toolkit_root . '/autoload.php';
 
-$config   = require $toolkitRoot . '/config.php';
-$manifest = Manifest::fromFile($runtimeDir . '/manifest.json');
+$config   = require $toolkit_root . '/config.php';
+$manifest = Manifest::from_file( $runtime_dir . '/manifest.json' );
 
-if (! is_file($testsDir . '/includes/functions.php')) {
+if ( ! is_file( $tests_dir . '/includes/functions.php' ) ) {
 	throw new RuntimeException(
 		'WordPress test library is missing. Run composer test again.'
 	);
 }
 
-if (! is_dir($polyfills)) {
+if ( ! is_dir( $polyfills ) ) {
 	throw new RuntimeException(
 		'PHPUnit Polyfills are missing. Run Composer install in .test-tools.'
 	);
 }
 
 if (
-	($config['test_database'] ?? null) !== 'wp_tests' ||
-	($config['database_host'] ?? null) !== 'db' ||
-	($config['table_prefix'] ?? null) !== 'wptests_'
+	( $config['test_database'] ?? null ) !== 'wp_tests' ||
+	( $config['database_host'] ?? null ) !== 'db' ||
+	( $config['table_prefix'] ?? null ) !== 'wptests_'
 ) {
 	throw new RuntimeException(
 		'Unsafe test database configuration; expected wp_tests on db with prefix wptests_.'
 	);
 }
 
-putenv('WP_TESTS_PHPUNIT_POLYFILLS_PATH=' . $polyfills);
+// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv -- Required by the WordPress test bootstrap contract.
+putenv( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH=' . $polyfills );
 
-defined('WP_ADMIN') || define('WP_ADMIN', true);
-defined('WP_CONTENT_DIR') || define('WP_CONTENT_DIR', $contentDir);
-defined('WP_CONTENT_URL') || define('WP_CONTENT_URL', 'http://example.org/wp-content');
-defined('WP_PLUGIN_DIR') || define('WP_PLUGIN_DIR', $contentDir . '/plugins');
-defined('WP_PLUGIN_URL') || define('WP_PLUGIN_URL', WP_CONTENT_URL . '/plugins');
-defined('WPMU_PLUGIN_DIR') || define('WPMU_PLUGIN_DIR', $contentDir . '/mu-plugins');
-defined('WPMU_PLUGIN_URL') || define('WPMU_PLUGIN_URL', WP_CONTENT_URL . '/mu-plugins');
+defined( 'WP_ADMIN' ) || define( 'WP_ADMIN', true );
+defined( 'WP_CONTENT_DIR' ) || define( 'WP_CONTENT_DIR', $content_dir );
+defined( 'WP_CONTENT_URL' ) || define( 'WP_CONTENT_URL', 'http://example.org/wp-content' );
+defined( 'WP_PLUGIN_DIR' ) || define( 'WP_PLUGIN_DIR', $content_dir . '/plugins' );
+defined( 'WP_PLUGIN_URL' ) || define( 'WP_PLUGIN_URL', WP_CONTENT_URL . '/plugins' );
+defined( 'WPMU_PLUGIN_DIR' ) || define( 'WPMU_PLUGIN_DIR', $content_dir . '/mu-plugins' );
+defined( 'WPMU_PLUGIN_URL' ) || define( 'WPMU_PLUGIN_URL', WP_CONTENT_URL . '/mu-plugins' );
 
-if ($manifest->isMultisite()) {
-	defined('WP_TESTS_MULTISITE') || define('WP_TESTS_MULTISITE', true);
-	defined('WP_NETWORK_ADMIN') || define('WP_NETWORK_ADMIN', true);
+if ( $manifest->is_multisite() ) {
+	defined( 'WP_TESTS_MULTISITE' ) || define( 'WP_TESTS_MULTISITE', true );
+	defined( 'WP_NETWORK_ADMIN' ) || define( 'WP_NETWORK_ADMIN', true );
 }
 
-require_once $testsDir . '/includes/functions.php';
+require_once $tests_dir . '/includes/functions.php';
 
-$siteBootstrap = $manifest->siteBootstrap();
+$site_bootstrap = $manifest->site_bootstrap();
 
-if ($siteBootstrap !== null) {
+if ( null !== $site_bootstrap ) {
 	try {
-		require $siteBootstrap;
-	} catch (Throwable $exception) {
+		require $site_bootstrap;
+	} catch ( Throwable $exception ) {
+		// phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserve exact paths and chained exception context.
 		throw new RuntimeException(
 			sprintf(
 				'Site test bootstrap failed at "%s": %s',
-				$siteBootstrap,
+				$site_bootstrap,
 				$exception->getMessage()
 			),
 			0,
 			$exception
 		);
+		// phpcs:enable WordPress.Security.EscapeOutput.ExceptionNotEscaped
 	}
 }
 
-foreach ($manifest->extensionBootstraps() as $bootstrap) {
+foreach ( $manifest->extension_bootstraps() as $bootstrap ) {
 	try {
 		require $bootstrap['path'];
-	} catch (Throwable $exception) {
+	} catch ( Throwable $exception ) {
+		// phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserve exact extension paths and chained exception context.
 		throw new RuntimeException(
 			sprintf(
 				'%s "%s" test bootstrap failed at "%s": %s',
-				ucfirst($bootstrap['type']),
+				ucfirst( $bootstrap['type'] ),
 				$bootstrap['slug'],
 				$bootstrap['path'],
 				$exception->getMessage()
@@ -91,63 +100,68 @@ foreach ($manifest->extensionBootstraps() as $bootstrap) {
 			0,
 			$exception
 		);
+		// phpcs:enable WordPress.Security.EscapeOutput.ExceptionNotEscaped
 	}
 }
 
-$pluginFiles = $manifest->pluginFiles();
-$stylesheet  = $manifest->stylesheet();
-$template    = $manifest->template();
+$plugin_files = $manifest->plugin_files();
+$stylesheet   = $manifest->stylesheet();
+$template     = $manifest->template();
 
-$activePluginsFilter = static fn (): array => $pluginFiles;
-$stylesheetFilter    = static fn (): string => $stylesheet;
-$templateFilter      = static fn (): string => $template;
+$active_plugins_filter = static fn (): array => $plugin_files;
+$stylesheet_filter     = static fn (): string => $stylesheet;
+$template_filter       = static fn (): string => $template;
 
-tests_add_filter('pre_option_active_plugins', $activePluginsFilter);
-tests_add_filter('pre_option_stylesheet', $stylesheetFilter);
-tests_add_filter('pre_option_template', $templateFilter);
-tests_add_filter('pre_http_request', [HttpMock::class, 'intercept'], 5, 3);
-tests_add_filter('pre_http_request', [HttpMock::class, 'blockUnexpected'], 10, 3);
+tests_add_filter( 'pre_option_active_plugins', $active_plugins_filter );
+tests_add_filter( 'pre_option_stylesheet', $stylesheet_filter );
+tests_add_filter( 'pre_option_template', $template_filter );
+tests_add_filter( 'pre_http_request', array( HttpMock::class, 'intercept' ), 5, 3 );
+tests_add_filter( 'pre_http_request', array( HttpMock::class, 'block_unexpected' ), 10, 3 );
 
-require $testsDir . '/includes/bootstrap.php';
+require $tests_dir . '/includes/bootstrap.php';
 
-remove_filter('pre_option_active_plugins', $activePluginsFilter);
-remove_filter('pre_option_stylesheet', $stylesheetFilter);
-remove_filter('pre_option_template', $templateFilter);
+remove_filter( 'pre_option_active_plugins', $active_plugins_filter );
+remove_filter( 'pre_option_stylesheet', $stylesheet_filter );
+remove_filter( 'pre_option_template', $template_filter );
 
-update_option('active_plugins', []);
-update_option('stylesheet', $stylesheet);
-update_option('template', $template);
+update_option( 'active_plugins', array() );
+update_option( 'stylesheet', $stylesheet );
+update_option( 'template', $template );
 
-$administratorId = wp_insert_user(
-	[
+$administrator_id = wp_insert_user(
+	array(
 		'user_login' => 'wp-test-administrator',
-		'user_pass'  => wp_generate_password(32, true, true),
+		'user_pass'  => wp_generate_password( 32, true, true ),
 		'user_email' => 'wp-test-administrator@example.test',
 		'role'       => 'administrator',
-	]
+	)
 );
 
-if (is_wp_error($administratorId)) {
+if ( is_wp_error( $administrator_id ) ) {
+	// phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserve WordPress error messages in the thrown exception.
 	throw new RuntimeException(
 		'Could not create the PHPUnit administrator: ' .
-		implode('; ', $administratorId->get_error_messages())
+		implode( '; ', $administrator_id->get_error_messages() )
 	);
+	// phpcs:enable WordPress.Security.EscapeOutput.ExceptionNotEscaped
 }
 
-wp_set_current_user((int) $administratorId);
+wp_set_current_user( (int) $administrator_id );
 
-foreach ($pluginFiles as $pluginFile) {
+foreach ( $plugin_files as $plugin_file ) {
 	try {
-		Lifecycle::activate($pluginFile, $manifest->isMultisite());
-	} catch (Throwable $exception) {
+		Lifecycle::activate( $plugin_file, $manifest->is_multisite() );
+	} catch ( Throwable $exception ) {
+		// phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserve the plugin basename and chained exception context.
 		throw new RuntimeException(
 			sprintf(
 				'Plugin lifecycle bootstrap failed for "%s": %s',
-				$pluginFile,
+				$plugin_file,
 				$exception->getMessage()
 			),
 			0,
 			$exception
 		);
+		// phpcs:enable WordPress.Security.EscapeOutput.ExceptionNotEscaped
 	}
 }

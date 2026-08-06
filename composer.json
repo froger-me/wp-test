@@ -2,15 +2,23 @@
     "name": "froal/test-froger-me-test-tools",
     "private": true,
     "require-dev": {
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.2",
         "phpunit/phpunit": "^9.6",
+        "squizlabs/php_codesniffer": "^3.13",
+        "wp-coding-standards/wpcs": "^3.3",
         "yoast/phpunit-polyfills": "^1.1"
     },
     "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        },
         "process-timeout": 0,
         "sort-packages": true
     },
     "scripts": {
         "doctor": "bash doctor-host.sh",
+        "lint:wpcs": "bash run-wpcs.sh check",
+        "format:wpcs": "bash run-wpcs.sh fix",
         "tail:log": "bash log-host.sh tail",
         "clear:log": "bash log-host.sh clear",
         "test": "bash run-tests-host.sh",
@@ -24,6 +32,8 @@
     },
     "scripts-descriptions": {
         "doctor": "Run the read-only DDEV and PHPUnit safety preflight.",
+        "lint:wpcs": "Check all non-ignored PHP files against WordPress Coding Standards.",
+        "format:wpcs": "Automatically fix WordPress Coding Standards violations where possible.",
         "tail:log": "Follow the local WordPress debug log inside the running DDEV project.",
         "clear:log": "Safely truncate the local WordPress debug log.",
         "test": "Run the default WordPress integration profile.",

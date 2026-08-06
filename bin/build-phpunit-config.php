@@ -1,95 +1,104 @@
 <?php
+/**
+ * Build the runtime PHPUnit configuration.
+ *
+ * @package WpTest
+ */
 
 declare(strict_types=1);
 
 use WpTest\Manifest;
 
-$toolkitRoot = dirname(__DIR__);
-$runtimeRoot = $toolkitRoot . '/runtime';
+$toolkit_root = dirname( __DIR__ );
+$runtime_root = $toolkit_root . '/runtime';
 
-require $toolkitRoot . '/vendor/autoload.php';
-require $toolkitRoot . '/autoload.php';
+require $toolkit_root . '/vendor/autoload.php';
+require $toolkit_root . '/autoload.php';
 
-$manifest = Manifest::fromFile($runtimeRoot . '/manifest.json');
+$manifest = Manifest::from_file( $runtime_root . '/manifest.json' );
 
-$escape = static fn (string $value): string =>
-	htmlspecialchars($value, ENT_QUOTES | ENT_XML1, 'UTF-8');
+$escape = static fn ( string $value ): string =>
+	htmlspecialchars( $value, ENT_QUOTES | ENT_XML1, 'UTF-8' );
 
-$suites = [];
+$suites   = array();
 $suites[] = sprintf(
 	"\t\t<testsuite name=\"Harness\">\n\t\t\t<directory suffix=\"Test.php\">%s</directory>\n\t\t</testsuite>",
-	$escape($toolkitRoot . '/tests')
+	$escape( $toolkit_root . '/tests' )
 );
 
-$coverageDirectories = [];
+$coverage_directories = array();
 
-foreach (array_merge($manifest->plugins(), $manifest->themes()) as $extension) {
-	if (! empty($extension['tests_enabled'])) {
-		$testsPath = $extension['tests_path'] ?? null;
+foreach ( array_merge( $manifest->plugins(), $manifest->themes() ) as $extension ) {
+	if ( ! empty( $extension['tests_enabled'] ) ) {
+		$tests_path = $extension['tests_path'] ?? null;
 
-		if (is_string($testsPath) && is_dir($testsPath)) {
+		if ( is_string( $tests_path ) && is_dir( $tests_path ) ) {
 			$suites[] = sprintf(
 				"\t\t<testsuite name=\"%s: %s\">\n\t\t\t<directory suffix=\"Test.php\">%s</directory>\n\t\t</testsuite>",
-				$escape(ucfirst((string) $extension['type'])),
-				$escape((string) $extension['slug']),
-				$escape($testsPath)
+				$escape( ucfirst( (string) $extension['type'] ) ),
+				$escape( (string) $extension['slug'] ),
+				$escape( $tests_path )
 			);
 		}
 	}
 
-	$sourcePath = $extension['source_path'] ?? null;
+	$source_path = $extension['source_path'] ?? null;
 
-	if (is_string($sourcePath) && is_dir($sourcePath)) {
-		$coverageDirectories[] = $sourcePath;
+	if ( is_string( $source_path ) && is_dir( $source_path ) ) {
+		$coverage_directories[] = $source_path;
 	}
 }
 
-$excludedGroups = [];
+$excluded_groups = array();
 
-if (getenv('WP_TEST_INCLUDE_DESTRUCTIVE') !== '1') {
-	$excludedGroups[] = 'destructive';
+if ( getenv( 'WP_TEST_INCLUDE_DESTRUCTIVE' ) !== '1' ) {
+	$excluded_groups[] = 'destructive';
 }
 
-if ($manifest->profile() !== 'harness') {
-	$excludedGroups[] = 'harness-fixture';
+if ( 'harness' !== $manifest->profile() ) {
+	$excluded_groups[] = 'harness-fixture';
+}
+
+if ( '1' !== getenv( 'WP_TEST_COVERAGE' ) ) {
+	$excluded_groups[] = 'coverage';
 }
 
 $groups = '';
 
-if ($excludedGroups !== []) {
-	$groupEntries = implode(
+if ( array() !== $excluded_groups ) {
+	$group_entries = implode(
 		"\n",
 		array_map(
-			static fn (string $group): string =>
-				"\t\t\t<group>" . $escape($group) . '</group>',
-			$excludedGroups
+			static fn ( string $group ): string =>
+				"\t\t\t<group>" . $escape( $group ) . '</group>',
+			$excluded_groups
 		)
 	);
 
 	$groups = sprintf(
 		"\t<groups>\n\t\t<exclude>\n%s\n\t\t</exclude>\n\t</groups>",
-		$groupEntries
+		$group_entries
 	);
 }
 
 $coverage = '';
 
-if (getenv('WP_TEST_COVERAGE') === '1') {
-	if ($coverageDirectories === []) {
-		$coverageDirectories[] = $toolkitRoot . '/src';
+if ( '1' === getenv( 'WP_TEST_COVERAGE' ) ) {
+	if ( array() === $coverage_directories ) {
+		$coverage_directories[] = $toolkit_root . '/src';
 	}
 
 	$includes = array_map(
-		static fn (string $directory): string => sprintf(
+		static fn ( string $directory ): string => sprintf(
 			"\t\t\t<directory suffix=\".php\">%s</directory>",
-			$escape($directory)
+			$escape( $directory )
 		),
-		array_values(array_unique($coverageDirectories))
+		array_values( array_unique( $coverage_directories ) )
 	);
 
 	$coverage = sprintf(
 		"\n\t<coverage processUncoveredFiles=\"false\">\n\t\t<include>\n%s\n\t\t</include>\n\t</coverage>",
-		implode("\n", $includes)
+		implode( "\n", $includes )
 	);
 }
 
@@ -112,10 +121,11 @@ $xml = sprintf(
 %s%s
 </phpunit>
 XML,
-	$escape($toolkitRoot . '/bootstrap.php'),
-	implode("\n", $suites),
-	$groups !== '' ? "\n" . $groups : '',
+	$escape( $toolkit_root . '/bootstrap.php' ),
+	implode( "\n", $suites ),
+	'' !== $groups ? "\n" . $groups : '',
 	$coverage
 );
 
-file_put_contents($runtimeRoot . '/phpunit.xml', $xml . PHP_EOL);
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- WordPress is not loaded by this CLI builder.
+file_put_contents( $runtime_root . '/phpunit.xml', $xml . PHP_EOL );

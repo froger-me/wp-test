@@ -4,8 +4,8 @@ set -euo pipefail
 
 TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$TOOLKIT_DIR")"
-LOG_PATH="/var/www/html/wp-content/debug.log"
 ACTION="${1:-}"
+LOG_PATH="$PROJECT_ROOT/wp-content/debug.log"
 
 if (($# > 0)); then
 	shift
@@ -27,25 +27,31 @@ esac
 
 cd "$PROJECT_ROOT"
 
-if ! command -v ddev >/dev/null 2>&1; then
-	echo "ERROR: DDEV is not available on the host PATH." >&2
-	exit 1
-fi
-
-if ! ddev exec --raw true >/dev/null 2>&1; then
-	echo "ERROR: The DDEV project is not running. Start it explicitly with 'ddev start'." >&2
-	exit 1
-fi
-
-ddev wp --skip-plugins --skip-themes eval-file \
-	/var/www/html/.test-tools/bin/prepare-debug-log.php
+php "$TOOLKIT_DIR/bin/validate-debug-log.php" \
+	"$PROJECT_ROOT/wp-config.php" \
+	"$LOG_PATH"
 
 case "$ACTION" in
 	tail)
-		exec ddev exec --raw tail -F "$LOG_PATH"
+		interrupted=0
+		trap 'interrupted=1' INT
+
+		if tail -F "$LOG_PATH"; then
+			status=0
+		else
+			status=$?
+		fi
+
+		trap - INT
+
+		if ((interrupted)) || ((status == 130)); then
+			exit 0
+		fi
+
+		exit "$status"
 		;;
 	clear)
-		ddev exec --raw truncate --size 0 "$LOG_PATH"
+		truncate -s 0 "$LOG_PATH"
 		echo "Cleared wp-content/debug.log."
 		;;
 esac

@@ -53,6 +53,8 @@ Current public commands are exposed from both the consuming WordPress root and `
 
 ```text
 composer doctor
+composer lint:wpcs
+composer format:wpcs
 composer tail:log
 composer clear:log
 composer test
@@ -84,17 +86,16 @@ Rules:
 
 The installed WordPress version is the source of truth for the synchronized clean core and WordPress PHPUnit library.
 
-Every run follows this sequence:
+Every run follows this sequence inside one DDEV container invocation:
 
-1. host preflight confirms DDEV is already running;
-2. container doctor confirms database, environment, compatibility, tools, extensions, and writable paths;
-3. the working site's active plugin and theme state is read without mutation;
-4. `ManifestBuilder` selects the profile and writes `runtime/manifest.json`;
-5. `prepare-runtime.php` creates an isolated `runtime/wp-content`;
-6. `sync-wordpress-tests.sh` synchronizes matching WordPress test assets;
-7. `bootstrap.php` loads selected code and runs plugin activation against `wp_tests`;
-8. generated `runtime/phpunit.xml` discovers toolkit and extension tests;
-9. PHPUnit runs.
+1. container doctor confirms database, environment, compatibility, tools, extensions, and writable paths;
+2. the working site's active plugin and theme state is read without mutation in one WordPress bootstrap; the harness profile skips this step;
+3. `ManifestBuilder` selects the profile and writes `runtime/manifest.json`;
+4. `prepare-runtime.php` creates an isolated `runtime/wp-content`;
+5. `sync-wordpress-tests.sh` synchronizes matching WordPress test assets;
+6. `bootstrap.php` loads selected code and runs plugin activation against `wp_tests`;
+7. generated `runtime/phpunit.xml` discovers toolkit and extension tests;
+8. PHPUnit runs.
 
 Do not bypass the preflight or lifecycle manager from a public entry point.
 
@@ -212,6 +213,8 @@ Document helper changes before treating them as stable public APIs.
 
 ## Generated files
 
+Routine validation and bulk maintenance must operate only on tracked or untracked, non-ignored files reported by Git. Do not traverse or modify ignored generated trees.
+
 Keep at least these ignored:
 
 ```text
@@ -262,9 +265,22 @@ Do not present planned commands as current features.
 For PHP or shell changes, perform at least:
 
 ```bash
-find .test-tools -name '*.php' -type f -print0 | xargs -0 -n1 php -l
-find .test-tools -name '*.sh' -type f -print0 | xargs -0 -n1 bash -n
+(
+  cd .test-tools
+  git ls-files --cached --others --exclude-standard -z -- '*.php' |
+    while IFS= read -r -d '' file; do
+      [[ ! -f "$file" ]] || php -l "$file" || exit
+    done
+)
+(
+  cd .test-tools
+  git ls-files --cached --others --exclude-standard -z -- '*.sh' |
+    while IFS= read -r -d '' file; do
+      [[ ! -f "$file" ]] || bash -n "$file" || exit
+    done
+)
 python3 -m json.tool .test-tools/composer.json >/dev/null
+composer lint:wpcs
 composer doctor
 composer test:harness
 composer test

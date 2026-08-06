@@ -4,7 +4,82 @@ set -euo pipefail
 
 TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$TOOLKIT_DIR")"
-RUNTIME_DIR="$TOOLKIT_DIR/runtime"
+
+if [[ "${1:-}" == "--container" ]]; then
+	shift
+	PHPUNIT_ARGS=("$@")
+	PHPUNIT_ENV=(env XDEBUG_MODE=off)
+	PHPUNIT_EXECUTABLE=("$TOOLKIT_DIR/vendor/bin/phpunit")
+	PROFILE="${WP_TEST_PROFILE:-default}"
+	TARGET="${WP_TEST_TARGET:-}"
+	RUNTIME_DIR="$TOOLKIT_DIR/runtime"
+
+	php "$TOOLKIT_DIR/bin/doctor.php" --quiet
+
+	mkdir -p "$RUNTIME_DIR"
+
+	BUILD_ARGS=(--profile="$PROFILE")
+
+	if [[ -n "$TARGET" ]]; then
+		BUILD_ARGS+=(--target="$TARGET")
+	fi
+
+	if [[ "$PROFILE" != "harness" ]]; then
+		wp --path="$PROJECT_ROOT" --skip-plugins --skip-themes eval-file --use-include \
+			"$TOOLKIT_DIR/bin/capture-working-state.php" \
+			> "$RUNTIME_DIR/working-site.json"
+	fi
+
+	php "$TOOLKIT_DIR/bin/build-manifest.php" "${BUILD_ARGS[@]}"
+	"$TOOLKIT_DIR/sync-wordpress-tests.sh"
+	php "$TOOLKIT_DIR/bin/prepare-runtime.php"
+	php "$TOOLKIT_DIR/bin/build-phpunit-config.php"
+
+	if [[ "${WP_TEST_COVERAGE:-0}" == "1" ]]; then
+		if php -m | grep -Eiq '^xdebug$'; then
+			if ! env XDEBUG_MODE=coverage php -r '
+				exit(
+					function_exists("xdebug_info") &&
+					in_array("coverage", xdebug_info("mode"), true)
+						? 0
+						: 1
+				);
+			'; then
+				echo "ERROR: Xdebug is loaded but coverage mode could not be enabled." >&2
+				exit 1
+			fi
+
+			PHPUNIT_ENV=(env XDEBUG_MODE=coverage)
+		elif php -m | grep -Eiq '^pcov$'; then
+			PHPUNIT_EXECUTABLE=(
+				php
+				-d
+				pcov.enabled=1
+				"$TOOLKIT_DIR/vendor/bin/phpunit"
+			)
+		else
+			echo "ERROR: Coverage requires Xdebug or PCOV in the DDEV web container." >&2
+			exit 1
+		fi
+
+		PHPUNIT_ARGS+=(
+			--coverage-html
+			"$TOOLKIT_DIR/coverage"
+		)
+	fi
+
+	if [[ "${WP_TEST_JUNIT:-0}" == "1" ]]; then
+		PHPUNIT_ARGS+=(
+			--log-junit
+			"$TOOLKIT_DIR/runtime/junit.xml"
+		)
+	fi
+
+	exec "${PHPUNIT_ENV[@]}" \
+		"${PHPUNIT_EXECUTABLE[@]}" \
+		-c "$TOOLKIT_DIR/runtime/phpunit.xml" \
+		"${PHPUNIT_ARGS[@]}"
+fi
 
 cd "$PROJECT_ROOT"
 
@@ -67,36 +142,17 @@ if [[ ("$PROFILE" == "plugin" || "$PROFILE" == "theme") && -z "$TARGET" ]]; then
 	exit 1
 fi
 
-bash "$TOOLKIT_DIR/doctor-host.sh" --quiet
-
-mkdir -p "$RUNTIME_DIR"
-
-ddev exec --raw env XDEBUG_MODE=off \
-	wp --path=/var/www/html option get active_plugins --format=json \
-	> "$RUNTIME_DIR/working-active-plugins.json"
-
-ddev exec --raw env XDEBUG_MODE=off \
-	wp --path=/var/www/html option get stylesheet \
-	> "$RUNTIME_DIR/working-stylesheet.txt"
-
-ddev exec --raw env XDEBUG_MODE=off \
-	wp --path=/var/www/html option get template \
-	> "$RUNTIME_DIR/working-template.txt"
-
-BUILD_ARGS=(--profile="$PROFILE")
-
-if [[ -n "$TARGET" ]]; then
-	BUILD_ARGS+=(--target="$TARGET")
+if ! command -v ddev >/dev/null 2>&1; then
+	echo "ERROR: DDEV is not available on the host PATH." >&2
+	exit 1
 fi
-
-ddev exec --raw env XDEBUG_MODE=off \
-	php /var/www/html/.test-tools/bin/build-manifest.php \
-	"${BUILD_ARGS[@]}"
 
 exec ddev exec --raw env \
 	XDEBUG_MODE=off \
+	WP_TEST_PROFILE="$PROFILE" \
+	WP_TEST_TARGET="$TARGET" \
 	WP_TEST_COVERAGE="$COVERAGE" \
 	WP_TEST_JUNIT="$JUNIT" \
 	WP_TEST_INCLUDE_DESTRUCTIVE="$INCLUDE_DESTRUCTIVE" \
-	/var/www/html/.test-tools/run-tests.sh \
+	/var/www/html/.test-tools/run-tests-host.sh --container \
 	"${PHPUNIT_ARGS[@]}"

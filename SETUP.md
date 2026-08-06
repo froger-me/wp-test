@@ -160,7 +160,7 @@ Do not ignore `.test-tools` when intentionally using it as a Git submodule. `.dd
 ddev start
 ```
 
-Routine test and logging commands require DDEV to be running and never start it implicitly.
+Routine test commands require DDEV to be running and never start it implicitly. Logging commands follow the host-mounted `wp-content/debug.log` directly and do not manage DDEV lifecycle.
 
 ## 6. Populate the working database
 
@@ -271,7 +271,6 @@ Ensure the executable shell entry points remain executable:
 ```bash
 chmod +x \
   .test-tools/run-tests-host.sh \
-  .test-tools/run-tests.sh \
   .test-tools/sync-wordpress-tests.sh
 ```
 
@@ -291,6 +290,8 @@ To use the same commands without changing into `.test-tools`, create or merge th
     },
     "scripts": {
         "doctor": "bash .test-tools/doctor-host.sh",
+        "lint:wpcs": "bash .test-tools/run-wpcs.sh check",
+        "format:wpcs": "bash .test-tools/run-wpcs.sh fix",
         "tail:log": "bash .test-tools/log-host.sh tail",
         "clear:log": "bash .test-tools/log-host.sh clear",
         "test": "bash .test-tools/run-tests-host.sh",
@@ -455,8 +456,8 @@ final class SettingsTest extends IntegrationTestCase
 {
 	public function test_settings_and_cron(): void
 	{
-		$this->setTrackedOption('my_plugin_setting', 'value');
-		$this->assertCronEventScheduled('my_plugin_cron');
+		$this->set_tracked_option('my_plugin_setting', 'value');
+		$this->assert_cron_event_scheduled('my_plugin_cron');
 	}
 }
 ```
@@ -487,13 +488,12 @@ composer tail:log
 
 The command:
 
-- verifies DDEV is already running;
-- loads WordPress with plugins and themes skipped;
-- validates `WP_DEBUG` and the standard `WP_DEBUG_LOG` destination;
+- reads `WP_DEBUG` and `WP_DEBUG_LOG` from `wp-config.php` locally without booting WordPress or entering DDEV;
+- validates the standard local logging destination;
 - creates `wp-content/debug.log` when it is missing and the directory is writable; and
-- follows it with `tail -F`, including across file rotation or recreation.
+- follows the host-mounted file with `tail -F`, including across file rotation or recreation.
 
-Press `Ctrl+C` to stop following the file. DDEV remains running.
+Press `Ctrl+C` to stop following the file with a successful exit status. DDEV remains running.
 
 Clear the local file without deleting it:
 
@@ -590,7 +590,7 @@ composer test
 
 ### DDEV is stopped
 
-`composer doctor`, logging commands, and all test commands fail from both supported directories. Start DDEV explicitly from the WordPress root:
+`composer doctor` and all test commands fail from both supported directories. Start DDEV explicitly from the WordPress root:
 
 ```bash
 ddev start

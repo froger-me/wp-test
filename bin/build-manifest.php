@@ -1,90 +1,109 @@
 <?php
+/**
+ * Build the runtime test manifest.
+ *
+ * @package WpTest
+ */
 
 declare(strict_types=1);
 
 use WpTest\ManifestBuilder;
 
-$toolkitRoot = dirname(__DIR__);
-$projectRoot = dirname($toolkitRoot);
+$toolkit_root = dirname( __DIR__ );
+$project_root = dirname( $toolkit_root );
 
-require $toolkitRoot . '/vendor/autoload.php';
-require $toolkitRoot . '/autoload.php';
+require $toolkit_root . '/vendor/autoload.php';
+require $toolkit_root . '/autoload.php';
 
-$options = getopt('', ['profile:', 'target::']);
-$profile = isset($options['profile']) ? (string) $options['profile'] : 'default';
-$target  = isset($options['target']) ? (string) $options['target'] : null;
+$options = getopt( '', array( 'profile:', 'target::' ) );
+$profile = isset( $options['profile'] ) ? (string) $options['profile'] : 'default';
+$target  = isset( $options['target'] ) ? (string) $options['target'] : null;
 
-$runtimeDir = $toolkitRoot . '/runtime';
-$pluginsFile = $runtimeDir . '/working-active-plugins.json';
-$stylesheetFile = $runtimeDir . '/working-stylesheet.txt';
-$templateFile = $runtimeDir . '/working-template.txt';
+$runtime_dir    = $toolkit_root . '/runtime';
+$state_file     = $runtime_dir . '/working-site.json';
+$active_plugins = array();
+$stylesheet     = '';
+$template       = '';
 
-foreach ([$pluginsFile, $stylesheetFile, $templateFile] as $requiredFile) {
-	if (! is_file($requiredFile)) {
-		fwrite(
-			STDERR,
-			sprintf("ERROR: Missing working-site state file: %s\n", $requiredFile)
-		);
-		exit(1);
+if ( 'harness' !== $profile ) {
+	if ( ! is_file( $state_file ) ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- WordPress is not loaded by this CLI builder.
+		fwrite( STDERR, sprintf( "ERROR: Missing working-site state file: %s\n", $state_file ) );
+		exit( 1 );
 	}
+
+	try {
+		$state = json_decode(
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Read local captured state before WordPress loads.
+			(string) file_get_contents( $state_file ),
+			true,
+			512,
+			JSON_THROW_ON_ERROR
+		);
+	} catch ( JsonException $exception ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- WordPress is not loaded by this CLI builder.
+		fwrite( STDERR, 'ERROR: Invalid working-site state: ' . $exception->getMessage() . "\n" );
+		exit( 1 );
+	}
+
+	if ( ! is_array( $state ) || ! is_array( $state['active_plugins'] ?? null ) ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- WordPress is not loaded by this CLI builder.
+		fwrite( STDERR, "ERROR: Working-site state must contain an active_plugins array.\n" );
+		exit( 1 );
+	}
+
+	$active_plugins = $state['active_plugins'];
+	$stylesheet     = is_string( $state['stylesheet'] ?? null ) ? trim( $state['stylesheet'] ) : '';
+	$template       = is_string( $state['template'] ?? null ) ? trim( $state['template'] ) : '';
 }
 
-$activePlugins = json_decode(
-	(string) file_get_contents($pluginsFile),
-	true,
-	512,
-	JSON_THROW_ON_ERROR
-);
+$configuration      = array();
+$configuration_file = $project_root . '/.wp-test.php';
 
-if (! is_array($activePlugins)) {
-	fwrite(STDERR, "ERROR: The active plugin list must be a JSON array.\n");
-	exit(1);
-}
+if ( is_file( $configuration_file ) ) {
+	$configuration = require $configuration_file;
 
-$stylesheet = trim((string) file_get_contents($stylesheetFile));
-$template   = trim((string) file_get_contents($templateFile));
-
-$configuration = [];
-$configurationFile = $projectRoot . '/.wp-test.php';
-
-if (is_file($configurationFile)) {
-	$configuration = require $configurationFile;
-
-	if (! is_array($configuration)) {
+	if ( ! is_array( $configuration ) ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- WordPress is not loaded by this CLI builder.
 		fwrite(
 			STDERR,
-			sprintf("ERROR: Configuration file must return an array: %s\n", $configurationFile)
+			sprintf( "ERROR: Configuration file must return an array: %s\n", $configuration_file )
 		);
-		exit(1);
+		exit( 1 );
 	}
 }
 
 try {
-	$builder  = new ManifestBuilder($projectRoot, $toolkitRoot, $configuration);
+	$builder  = new ManifestBuilder( $project_root, $toolkit_root, $configuration );
 	$manifest = $builder->build(
 		$profile,
 		$target,
 		array_values(
 			array_filter(
-				$activePlugins,
-				static fn ($plugin): bool => is_string($plugin)
+				$active_plugins,
+				static fn ( $plugin ): bool => is_string( $plugin )
 			)
 		),
 		$stylesheet,
 		$template
 	);
-} catch (Throwable $exception) {
-	fwrite(STDERR, "ERROR: " . $exception->getMessage() . "\n");
-	exit(1);
+} catch ( Throwable $exception ) {
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- WordPress is not loaded by this CLI builder.
+	fwrite( STDERR, 'ERROR: ' . $exception->getMessage() . "\n" );
+	exit( 1 );
 }
 
-if (! is_dir($runtimeDir) && ! mkdir($runtimeDir, 0777, true) && ! is_dir($runtimeDir)) {
-	fwrite(STDERR, "ERROR: Could not create runtime directory.\n");
-	exit(1);
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- WordPress is not loaded by this CLI builder.
+if ( ! is_dir( $runtime_dir ) && ! mkdir( $runtime_dir, 0777, true ) && ! is_dir( $runtime_dir ) ) {
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- WordPress is not loaded by this CLI builder.
+	fwrite( STDERR, "ERROR: Could not create runtime directory.\n" );
+	exit( 1 );
 }
 
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- WordPress is not loaded by this CLI builder.
 file_put_contents(
-	$runtimeDir . '/manifest.json',
+	$runtime_dir . '/manifest.json',
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- wp_json_encode() cannot throw on encoding failure.
 	json_encode(
 		$manifest,
 		JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
@@ -93,8 +112,8 @@ file_put_contents(
 
 printf(
 	"Test profile: %s%s; %d plugin(s), %d theme(s).\n",
-	$profile,
-	$target !== null && $target !== '' ? sprintf(' (%s)', $target) : '',
-	count($manifest['plugins']),
-	count($manifest['themes'])
+	$profile, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CLI status output, not HTML.
+	null !== $target && '' !== $target ? sprintf( ' (%s)', $target ) : '', // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CLI status output, not HTML.
+	count( $manifest['plugins'] ),
+	count( $manifest['themes'] )
 );

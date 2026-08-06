@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<ruleset name="wp-test">
+	<description>WordPress Coding Standards for the wp-test toolkit.</description>
+
+	<arg name="extensions" value="php"/>
+	<arg name="parallel" value="8"/>
+	<arg value="p"/>
+
+	<config name="testVersion" value="8.0-"/>
+
+	<rule ref="WordPress"/>
+
+	<!-- Limit filename exceptions to PSR-4 source classes, PHPUnit's *Test.php
+	     discovery convention, and the copyable dot-named config example. -->
+	<rule ref="WordPress.Files.FileName">
+		<exclude-pattern>/src/*.php</exclude-pattern>
+		<exclude-pattern>/*/tests/phpunit/*Test\.php</exclude-pattern>
+		<exclude-pattern>/tests/*Test\.php</exclude-pattern>
+		<exclude-pattern>/wp-test.config.example.php</exclude-pattern>
+	</rule>
+</ruleset>

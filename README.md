@@ -26,6 +26,8 @@ From the WordPress root:
 
 ```bash
 composer doctor
+composer lint:wpcs
+composer format:wpcs
 composer tail:log
 composer clear:log
 composer test
@@ -43,6 +45,8 @@ From inside `.test-tools`, the command names and behavior are identical:
 ```bash
 cd .test-tools
 composer doctor
+composer lint:wpcs
+composer format:wpcs
 composer tail:log
 composer clear:log
 composer test
@@ -55,7 +59,7 @@ composer test:coverage
 composer test:junit
 ```
 
-The host wrappers resolve the WordPress root from the `.test-tools` installation path before invoking DDEV. They do not depend on the shell's original working directory and do not require `ddev sh`.
+The host wrappers resolve the WordPress root from the `.test-tools` installation path and do not depend on the shell's original working directory. Test commands enter the existing DDEV web container only once. Logging commands validate and follow the host-mounted local file directly, so they do not incur container startup latency.
 
 Native PHPUnit arguments pass through from either location:
 
@@ -66,13 +70,15 @@ composer test:plugin -- plugin-slug --filter UpgradeTest
 composer test -- --order-by=random --random-order-seed=12345
 ```
 
-`composer test:coverage` requires Xdebug or PCOV to be loaded explicitly. With DDEV Xdebug, run `ddev xdebug on` first and `ddev xdebug off` afterward. The toolkit forces `XDEBUG_MODE=off` for Doctor, WP-CLI, manifest generation, and other preparation processes, then enables `XDEBUG_MODE=coverage` only for the final PHPUnit process. This prevents step-debug connection attempts and fails the run if the requested coverage driver is not actually active. Coverage is written to `.test-tools/coverage/`.
+`composer lint:wpcs` checks every tracked or untracked, non-ignored PHP file against the WordPress Coding Standards ruleset and the documented CLI/PSR-4 exceptions in `phpcs.xml.dist`. `composer format:wpcs` applies PHPCBF fixes to that same Git-derived file set. Generated, ignored, and vendor files are never passed to either command.
+
+`composer test:coverage` requires Xdebug or PCOV to be loaded explicitly. With DDEV Xdebug, run `ddev xdebug on` first and `ddev xdebug off` afterward. The toolkit forces `XDEBUG_MODE=off` for Doctor, WP-CLI, manifest generation, and other preparation processes, then enables `XDEBUG_MODE=coverage` only for the final PHPUnit process. A coverage-only self-check verifies the requested driver; normal runs exclude that check rather than reporting it as skipped. Coverage is written to `.test-tools/coverage/`.
 
 `composer test:junit` writes `.test-tools/runtime/junit.xml`.
 
 ## Local WordPress logging
 
-The logging commands require DDEV to be running and require local WordPress logging to resolve to `wp-content/debug.log`:
+The logging commands require local DDEV WordPress logging to resolve to `wp-content/debug.log`:
 
 ```php
 defined('WP_DEBUG') || define('WP_DEBUG', true);
@@ -86,7 +92,7 @@ Follow the log:
 composer tail:log
 ```
 
-The command validates `WP_DEBUG` and `WP_DEBUG_LOG`, creates `wp-content/debug.log` when its directory is writable, and then runs `tail -F` inside the existing DDEV web container. `Ctrl+C` stops only the log follower; it does not stop DDEV.
+The command reads `WP_DEBUG` and `WP_DEBUG_LOG` directly from `wp-config.php` without booting WordPress, creates `wp-content/debug.log` when its directory is writable, and then runs the host's `tail -F` against the mounted file. `Ctrl+C` exits successfully and stops only the log follower.
 
 Clear the log without deleting it:
 
@@ -107,8 +113,8 @@ ddev logs -s db -f
 
 `composer test`:
 
-1. verifies DDEV, database isolation, required tools, PHP extensions, writable generated paths, and the WordPress/PHP/PHPUnit compatibility policy;
-2. reads the working site's active ordinary plugins, active theme, and parent theme;
+1. enters the existing DDEV web container once and verifies database isolation, required tools, PHP extensions, writable generated paths, and the WordPress/PHP/PHPUnit compatibility policy;
+2. reads the working site's active ordinary plugins, active theme, and parent theme in one WordPress bootstrap;
 3. applies optional selection rules from `<wordpress-root>/.wp-test.php`;
 4. synchronizes a clean WordPress core and WordPress PHPUnit library to the installed WordPress version;
 5. creates an isolated runtime `wp-content` containing links to only the selected extensions;
@@ -118,7 +124,7 @@ ddev logs -s db -f
 9. discovers conventional plugin and theme PHPUnit tests; and
 10. runs the harness and extension suites.
 
-The working `db` database and working upload directory are not used by PHPUnit.
+The working `db` database and working upload directory are not used by PHPUnit. The harness profile does not inspect or boot the working site because its fixture selection is self-contained.
 
 The toolkit's non-fixture safety checks remain part of normal profiles. Fixture lifecycle, REST, upload, mail, and helper self-tests use PHPUnit group `harness-fixture` and run only through `composer test:harness`; default, focused, multisite, coverage, JUnit, and destructive profiles exclude that group so toolkit fixtures cannot affect the selected real plugin/theme combination.
 
@@ -224,7 +230,7 @@ use WpTest\HttpMock;
 HttpMock::queue(
 	'https://service.example.test/api',
 	HttpMock::response('{"ok":true}', 200),
-	HttpMock::rateLimited(30),
+	HttpMock::rate_limited(30),
 	HttpMock::timeout()
 );
 ```
@@ -234,11 +240,11 @@ Available patterns include normal responses, `WP_Error`, malformed JSON, rate li
 ### Mail capture
 
 ```php
-$this->enableMailCapture();
+$this->enable_mail_capture();
 
 wp_mail('recipient@example.test', 'Subject', 'Body');
 
-$this->assertCount(1, $this->capturedMail());
+$this->assertCount(1, $this->captured_mail());
 ```
 
 ## Compatibility policy
@@ -253,7 +259,8 @@ Unknown future WordPress branches fail explicitly instead of silently running wi
 .test-tools/
 ├── autoload.php
 ├── bin/
-│   └── prepare-debug-log.php
+│   ├── capture-working-state.php
+│   └── validate-debug-log.php
 ├── fixtures/
 ├── src/
 ├── tests/
@@ -264,7 +271,6 @@ Unknown future WordPress branches fail explicitly instead of silently running wi
 ├── log-host.sh
 ├── phpunit.xml.dist
 ├── run-tests-host.sh
-├── run-tests.sh
 ├── sync-wordpress-tests.sh
 └── wp-test.config.example.php
 ```
