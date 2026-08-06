@@ -5,6 +5,17 @@ set -euo pipefail
 ANYAPE_WP_TEST_TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$ANYAPE_WP_TEST_TOOLS_DIR")"
 
+if [[ "${1:-}" != "--container" && -z "${ANYAPE_WP_TEST_TOOLS_LOG_FILE:-}" ]]; then
+	# The path is resolved from this script's directory.
+	# shellcheck disable=SC1091
+	source "$ANYAPE_WP_TEST_TOOLS_DIR/logging-host.sh"
+	anyape_wp_test_tools_run_standalone_test \
+		"$ANYAPE_WP_TEST_TOOLS_DIR" \
+		"Running the PHP tests..." \
+		bash "$ANYAPE_WP_TEST_TOOLS_DIR/run-tests-host.sh" "$@"
+	exit $?
+fi
+
 if [[ "${1:-}" == "--container" ]]; then
 	shift
 	PHPUNIT_ARGS=("$@")
