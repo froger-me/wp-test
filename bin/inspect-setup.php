@@ -4,6 +4,7 @@
  *
  * @package AnyapeWPTestTools
  */
+
 declare(strict_types=1);
 
 // phpcs:disable WordPress.WP.AlternativeFunctions -- This standalone host command runs before WordPress is loaded.
@@ -111,7 +112,7 @@ function anyape_wp_test_tools_ddev_packages( string $contents ): array {
 			}
 		}
 	} elseif ( preg_match( '/^webimage_extra_packages:\s*\R((?:[ \t]+-[^\r\n]*\R?)*)/m', $contents, $match ) ) {
-		if ( preg_match_all( '/^[ \t]+-[ \t]*[\'\"]?([^\'\"\r\n]+)[\'\"]?[ \t]*$/m', $match[1], $package_matches ) ) {
+		if ( preg_match_all( '/^[ \t]+-[\t ]*[\'\"]?([^\'\"\r\n]+)[\'\"]?[ \t]*$/m', $match[1], $package_matches ) ) {
 			foreach ( $package_matches[1] as $package ) {
 				$packages[] = trim( $package );
 			}
