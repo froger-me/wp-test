@@ -4,11 +4,12 @@
  *
  * @package AnyapeWPTestTools
  */
-
 declare(strict_types=1);
 
 // phpcs:disable WordPress.WP.AlternativeFunctions -- This standalone host command runs before WordPress is loaded.
 // phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Command errors must preserve exact command names and local paths.
+
+require_once __DIR__ . '/file-tools.php';
 
 /**
  * Merge root Composer commands without replacing unrelated content.
@@ -20,8 +21,8 @@ declare(strict_types=1);
  * @throws RuntimeException When JSON is invalid or a command conflicts.
  */
 function anyape_wp_test_tools_update_root_composer( string $root_file, string $anyape_wp_test_tools_file, bool $check_only = false ): array {
-	$anyape_wp_test_tools = anyape_wp_test_tools_read_json_file( $anyape_wp_test_tools_file );
-	$root                 = is_file( $root_file ) ? anyape_wp_test_tools_read_json_file( $root_file ) : array();
+	$anyape_wp_test_tools = anyape_wp_test_tools_read_json_object( $anyape_wp_test_tools_file );
+	$root                 = is_file( $root_file ) ? anyape_wp_test_tools_read_json_object( $root_file ) : array();
 	$scripts              = $anyape_wp_test_tools['scripts'] ?? null;
 	if ( ! is_array( $scripts ) ) {
 		throw new RuntimeException( 'Anyape WP Test Tools composer.json does not contain a scripts object.' );
@@ -72,75 +73,22 @@ function anyape_wp_test_tools_update_root_composer( string $root_file, string $a
 		);
 	}
 
-	$backup = null;
+	$backup      = null;
+	$permissions = null;
 	if ( is_file( $root_file ) ) {
-		$backup = anyape_wp_test_tools_composer_backup_name( $root_file );
+		$backup = anyape_wp_test_tools_unused_backup_path( $root_file );
 		if ( ! copy( $root_file, $backup ) ) {
 			throw new RuntimeException( 'Could not back up root composer.json.' );
 		}
+		$file_permissions = fileperms( $root_file );
+		$permissions      = false !== $file_permissions ? $file_permissions & 0777 : null;
 	}
-	anyape_wp_test_tools_composer_atomic_write( $root_file, $encoded );
-	anyape_wp_test_tools_read_json_file( $root_file );
+	anyape_wp_test_tools_atomic_write( $root_file, $encoded, $permissions );
+	anyape_wp_test_tools_read_json_object( $root_file );
 	return array(
 		'changed' => true,
 		'backup'  => $backup,
 	);
-}
-
-/**
- * Read a JSON object.
- *
- * @param string $path JSON file path.
- * @return array<string, mixed>
- * @throws RuntimeException When the file is missing or does not contain an object.
- */
-function anyape_wp_test_tools_read_json_file( string $path ): array {
-	if ( ! is_file( $path ) ) {
-		throw new RuntimeException( 'JSON file does not exist: ' . $path );
-	}
-	$data = json_decode( (string) file_get_contents( $path ), true, 512, JSON_THROW_ON_ERROR );
-	if ( ! is_array( $data ) ) {
-		throw new RuntimeException( 'JSON file must contain an object: ' . $path );
-	}
-	return $data;
-}
-
-/**
- * Write a complete file through a temporary file in the same directory.
- *
- * @param string $path     Destination path.
- * @param string $contents Complete JSON contents.
- * @throws RuntimeException When the destination cannot be written atomically.
- */
-function anyape_wp_test_tools_composer_atomic_write( string $path, string $contents ): void {
-	$directory = dirname( $path );
-	if ( ! is_dir( $directory ) || ! is_writable( $directory ) ) {
-		throw new RuntimeException( 'Composer destination directory is not writable: ' . $directory );
-	}
-	$temp = tempnam( $directory, '.composer-anyape-wp-test-tools-' );
-	if ( false === $temp || false === file_put_contents( $temp, $contents ) || ! rename( $temp, $path ) ) {
-		if ( is_string( $temp ) && file_exists( $temp ) ) {
-			unlink( $temp );
-		}
-		throw new RuntimeException( 'Could not write root composer.json safely.' );
-	}
-}
-
-/**
- * Return an unused dated backup name.
- *
- * @param string $path File being backed up.
- * @return string
- */
-function anyape_wp_test_tools_composer_backup_name( string $path ): string {
-	$base   = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' );
-	$backup = $base;
-	$suffix = 1;
-	while ( file_exists( $backup ) ) {
-		$backup = $base . '-' . $suffix;
-		++$suffix;
-	}
-	return $backup;
 }
 
 if ( realpath( (string) ( $argv[0] ?? '' ) ) === __FILE__ ) {
