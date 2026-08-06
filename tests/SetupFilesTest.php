@@ -42,7 +42,10 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$result = anyape_wp_test_tools_update_wp_config( $path );
 		$this->assertTrue( $result['changed'] );
 		$this->assertFileExists( $result['backup'] );
-		$this->assertSame( 'ready', anyape_wp_test_tools_inspect_wp_config( (string) file_get_contents( $path ) )['status'] );
+		$this->assertSame(
+			'ready',
+			anyape_wp_test_tools_inspect_wp_config( (string) file_get_contents( $path ) )['status']
+		);
 		$this->assertFalse( anyape_wp_test_tools_update_wp_config( $path )['changed'] );
 
 		$invalid  = $this->copy_fixture( 'invalid/wp-config.txt', 'invalid.php' );
@@ -71,22 +74,39 @@ final class SetupFilesTest extends WP_UnitTestCase {
 	/** Composer and ignore updates preserve unrelated project content. */
 	public function test_shared_project_files_are_updated_without_duplicates(): void {
 		$composer = $this->copy_fixture( 'composer/existing.json', 'composer.json' );
-		$result   = anyape_wp_test_tools_update_root_composer( $composer, dirname( __DIR__ ) . '/composer.json' );
+		$result   = anyape_wp_test_tools_update_root_composer(
+			$composer,
+			dirname( __DIR__ ) . '/composer.json'
+		);
 		$this->assertTrue( $result['changed'] );
 		$data = json_decode( (string) file_get_contents( $composer ), true, 512, JSON_THROW_ON_ERROR );
 		$this->assertSame( '^1.0', $data['require']['example/package'] );
 		$this->assertSame( 'php site-command.php', $data['scripts']['site:command'] );
-		$this->assertFalse( anyape_wp_test_tools_update_root_composer( $composer, dirname( __DIR__ ) . '/composer.json' )['changed'] );
+		$this->assertFalse(
+			anyape_wp_test_tools_update_root_composer(
+				$composer,
+				dirname( __DIR__ ) . '/composer.json'
+			)['changed']
+		);
 
 		mkdir( $this->temporary_directory . '/.git' );
 		file_put_contents( $this->temporary_directory . '/.gitignore', ".DS_Store\n" );
 		mkdir( $this->temporary_directory . '/.vscode' );
-		copy( dirname( __DIR__ ) . '/fixtures/setup/sftp/sftp.json', $this->temporary_directory . '/.vscode/sftp.json' );
-		$this->assertTrue( anyape_wp_test_tools_update_ignore_file( $this->temporary_directory, 'git' )['changed'] );
+		copy(
+			dirname( __DIR__ ) . '/fixtures/setup/sftp/sftp.json',
+			$this->temporary_directory . '/.vscode/sftp.json'
+		);
+		$this->assertTrue(
+			anyape_wp_test_tools_update_ignore_file( $this->temporary_directory, 'git' )['changed']
+		);
 		$sftp = anyape_wp_test_tools_update_ignore_file( $this->temporary_directory, 'sftp' );
 		$this->assertSame( 0600, fileperms( $sftp['backup'] ) & 0777 );
-		$this->assertFalse( anyape_wp_test_tools_update_ignore_file( $this->temporary_directory, 'git' )['changed'] );
-		$this->assertFalse( anyape_wp_test_tools_update_ignore_file( $this->temporary_directory, 'sftp' )['changed'] );
+		$this->assertFalse(
+			anyape_wp_test_tools_update_ignore_file( $this->temporary_directory, 'git' )['changed']
+		);
+		$this->assertFalse(
+			anyape_wp_test_tools_update_ignore_file( $this->temporary_directory, 'sftp' )['changed']
+		);
 	}
 
 	/** A conflicting root command is refused without replacing the file. */
@@ -94,7 +114,10 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$path     = $this->copy_fixture( 'composer/conflict.json', 'composer.json' );
 		$original = (string) file_get_contents( $path );
 		try {
-			anyape_wp_test_tools_update_root_composer( $path, dirname( __DIR__ ) . '/composer.json' );
+			anyape_wp_test_tools_update_root_composer(
+				$path,
+				dirname( __DIR__ ) . '/composer.json'
+			);
 			$this->fail( 'Expected a command conflict.' );
 		} catch ( RuntimeException $error ) {
 			$this->assertSame( $original, file_get_contents( $path ) );
@@ -106,20 +129,39 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$wp_config = $this->copy_fixture( 'standard/wp-config.php', 'wp-config.php' );
 		anyape_wp_test_tools_update_wp_config( $wp_config );
 		$composer = $this->copy_fixture( 'composer/empty.json', 'composer.json' );
-		anyape_wp_test_tools_update_root_composer( $composer, dirname( __DIR__ ) . '/composer.json' );
+		anyape_wp_test_tools_update_root_composer(
+			$composer,
+			dirname( __DIR__ ) . '/composer.json'
+		);
 		file_put_contents( $this->temporary_directory . '/.gitignore', ".DS_Store\n" );
 		mkdir( $this->temporary_directory . '/.vscode' );
-		copy( dirname( __DIR__ ) . '/fixtures/setup/sftp/sftp.json', $this->temporary_directory . '/.vscode/sftp.json' );
+		copy(
+			dirname( __DIR__ ) . '/fixtures/setup/sftp/sftp.json',
+			$this->temporary_directory . '/.vscode/sftp.json'
+		);
 		anyape_wp_test_tools_update_ignore_file( $this->temporary_directory, 'git' );
 		anyape_wp_test_tools_update_ignore_file( $this->temporary_directory, 'sftp' );
 
 		$this->assertSame(
-			array( 'wp_config_restored' => true, 'root_composer_removed' => true ),
-			anyape_wp_test_tools_uninstall_project_files( $this->temporary_directory, dirname( __DIR__ ) . '/composer.json', false )
+			array(
+				'wp_config_restored'    => true,
+				'root_composer_removed' => true,
+			),
+			anyape_wp_test_tools_uninstall_project_files(
+				$this->temporary_directory,
+				dirname( __DIR__ ) . '/composer.json',
+				false
+			)
 		);
 		$this->assertFileDoesNotExist( $composer );
-		$this->assertStringNotContainsString( 'IS_DDEV_PROJECT', (string) file_get_contents( $wp_config ) );
-		$this->assertSame( ".DS_Store\n", file_get_contents( $this->temporary_directory . '/.gitignore' ) );
+		$this->assertStringNotContainsString(
+			'IS_DDEV_PROJECT',
+			(string) file_get_contents( $wp_config )
+		);
+		$this->assertSame(
+			".DS_Store\n",
+			file_get_contents( $this->temporary_directory . '/.gitignore' )
+		);
 	}
 
 	/** Setup inspection reports configured DDEV packages. */
@@ -154,7 +196,10 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		anyape_wp_test_tools_copy_path( $source, $copy );
 		$this->assertTrue( is_link( $copy . '/outside-link' ) );
 		$this->assertSame( 0640, fileperms( $copy . '/nested/file.txt' ) & 0777 );
-		$this->assertSame( anyape_wp_test_tools_path_digest( $source ), anyape_wp_test_tools_path_digest( $copy ) );
+		$this->assertSame(
+			anyape_wp_test_tools_path_digest( $source ),
+			anyape_wp_test_tools_path_digest( $copy )
+		);
 		$inode = fileinode( $copy );
 		anyape_wp_test_tools_clear_directory( $copy );
 		$this->assertSame( $inode, fileinode( $copy ) );
@@ -169,9 +214,14 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$this->copy_tool_files(
 			$tool,
 			array(
-				'setup-host.sh', 'logging-host.sh', 'composer.json', 'bin/file-tools.php',
-				'bin/inspect-setup.php', 'bin/update-wp-config.php',
-				'bin/update-root-composer.php', 'bin/update-ignore-files.php',
+				'setup-host.sh',
+				'logging-host.sh',
+				'composer.json',
+				'bin/file-tools.php',
+				'bin/inspect-setup.php',
+				'bin/update-wp-config.php',
+				'bin/update-root-composer.php',
+				'bin/update-ignore-files.php',
 			)
 		);
 		$this->write_ddev_config( $root, array( 'subversion' ) );
@@ -203,6 +253,7 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$ddev_delete    = strpos( $script, 'ddev delete -Oy --skip-hooks' );
 		$shared_cleanup = strpos( $script, 'bin/uninstall-project.php" "$PROJECT_ROOT"' );
 		$self_delete    = strpos( $script, 'rm -rf -- "$ANYAPE_WP_TEST_TOOLS_DIR"' );
+
 		$this->assertNotFalse( $preflight );
 		$this->assertNotFalse( $ddev_delete );
 		$this->assertNotFalse( $shared_cleanup );
@@ -247,20 +298,34 @@ final class SetupFilesTest extends WP_UnitTestCase {
 
 	/** Run one private command. */
 	private function run_command( array $command, string $working_directory, array $environment ): array {
-		$process = proc_open(
+		$current_environment = getenv();
+		$process             = proc_open(
 			$command,
-			array( 0 => array( 'pipe', 'r' ), 1 => array( 'pipe', 'w' ), 2 => array( 'pipe', 'w' ) ),
+			array(
+				0 => array( 'pipe', 'r' ),
+				1 => array( 'pipe', 'w' ),
+				2 => array( 'pipe', 'w' ),
+			),
 			$pipes,
 			$working_directory,
-			array_replace( getenv(), $environment )
+			array_replace(
+				is_array( $current_environment ) ? $current_environment : array(),
+				$environment
+			)
 		);
 		$this->assertIsResource( $process );
+
 		fclose( $pipes[0] );
 		$stdout = stream_get_contents( $pipes[1] );
 		$stderr = stream_get_contents( $pipes[2] );
 		fclose( $pipes[1] );
 		fclose( $pipes[2] );
-		return array( 'status' => proc_close( $process ), 'stdout' => (string) $stdout, 'stderr' => (string) $stderr );
+
+		return array(
+			'status' => proc_close( $process ),
+			'stdout' => (string) $stdout,
+			'stderr' => (string) $stderr,
+		);
 	}
 
 	/** Return a repeatable directory snapshot independent of production helpers. */
@@ -271,8 +336,12 @@ final class SetupFilesTest extends WP_UnitTestCase {
 			RecursiveIteratorIterator::SELF_FIRST
 		);
 		foreach ( $iterator as $item ) {
-			$relative  = substr( $item->getPathname(), strlen( $root ) + 1 );
-			$entries[] = ( $item->isDir() ? 'd ' : 'f ' ) . $relative . ( $item->isFile() ? ' ' . hash_file( 'sha256', $item->getPathname() ) : '' );
+			$relative = substr( $item->getPathname(), strlen( $root ) + 1 );
+			if ( $item->isDir() ) {
+				$entries[] = 'd ' . $relative;
+			} else {
+				$entries[] = 'f ' . $relative . ' ' . hash_file( 'sha256', $item->getPathname() );
+			}
 		}
 		sort( $entries, SORT_STRING );
 		return $entries;
@@ -290,12 +359,17 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		if ( ! is_dir( $directory ) ) {
 			return;
 		}
+
 		$iterator = new RecursiveIteratorIterator(
 			new RecursiveDirectoryIterator( $directory, FilesystemIterator::SKIP_DOTS ),
 			RecursiveIteratorIterator::CHILD_FIRST
 		);
 		foreach ( $iterator as $item ) {
-			$item->isDir() && ! $item->isLink() ? rmdir( $item->getPathname() ) : unlink( $item->getPathname() );
+			if ( $item->isDir() && ! $item->isLink() ) {
+				rmdir( $item->getPathname() );
+			} else {
+				unlink( $item->getPathname() );
+			}
 		}
 		rmdir( $directory );
 	}
