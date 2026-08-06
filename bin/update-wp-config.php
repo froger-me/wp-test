@@ -4,13 +4,13 @@
  *
  * @package AnyapeWPTestTools
  */
-
 declare(strict_types=1);
 
 // phpcs:disable WordPress.WP.AlternativeFunctions,WordPress.PHP.DiscouragedPHPFunctions -- Standalone setup runs before WordPress is loaded and must validate a PHP file.
 // phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Command errors must preserve exact local paths and validation details.
 
 require_once __DIR__ . '/inspect-setup.php';
+require_once __DIR__ . '/file-tools.php';
 
 /**
  * Update wp-config.php or report why it cannot be updated.
@@ -55,44 +55,34 @@ function anyape_wp_test_tools_update_wp_config( string $path, bool $check_only =
 		);
 	}
 
-	$directory = dirname( $path );
-	$backup    = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' );
-	$suffix    = 1;
-	while ( file_exists( $backup ) ) {
-		$backup = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' ) . '-' . $suffix;
-		++$suffix;
-	}
+	$backup = anyape_wp_test_tools_unused_backup_path( $path );
 	if ( ! copy( $path, $backup ) ) {
 		throw new RuntimeException( 'Could not create wp-config.php backup: ' . $backup );
 	}
-	$temp = tempnam( $directory, '.wp-config-anyape-wp-test-tools-' );
-	if ( false === $temp ) {
-		throw new RuntimeException( 'Could not create a temporary file beside wp-config.php.' );
-	}
-	$permissions = fileperms( $path );
+	$file_permissions = fileperms( $path );
+	$permissions      = false !== $file_permissions ? $file_permissions & 0777 : null;
+	$validation_path  = null;
+
 	try {
-		if ( false === file_put_contents( $temp, $updated ) ) {
-			throw new RuntimeException( 'Could not write the proposed wp-config.php.' );
+		$validation_path = tempnam( dirname( $path ), '.wp-config-anyape-wp-test-tools-' );
+		if ( false === $validation_path ) {
+			throw new RuntimeException( 'Could not create a temporary file beside wp-config.php.' );
 		}
-		if ( false !== $permissions ) {
-			chmod( $temp, $permissions & 0777 );
-		}
-		anyape_wp_test_tools_assert_php_syntax( $temp );
-		if ( ! rename( $temp, $path ) ) {
-			throw new RuntimeException( 'Could not replace wp-config.php with the validated file.' );
-		}
-		$temp = '';
+		anyape_wp_test_tools_atomic_write( $validation_path, $updated, $permissions );
+		anyape_wp_test_tools_assert_php_syntax( $validation_path );
+		anyape_wp_test_tools_atomic_write( $path, $updated, $permissions );
 		anyape_wp_test_tools_assert_php_syntax( $path );
 		$final = anyape_wp_test_tools_inspect_wp_config( (string) file_get_contents( $path ) );
 		if ( 'ready' !== $final['status'] ) {
 			throw new RuntimeException( 'The updated wp-config.php did not pass the DDEV structure check.' );
 		}
 	} catch ( Throwable $error ) {
-		if ( '' !== $temp && file_exists( $temp ) ) {
-			unlink( $temp );
-		}
-		copy( $backup, $path );
+		anyape_wp_test_tools_atomic_write( $path, (string) file_get_contents( $backup ), $permissions );
 		throw new RuntimeException( $error->getMessage() . ' The original wp-config.php was restored from ' . $backup . '.', 0, $error );
+	} finally {
+		if ( is_string( $validation_path ) && file_exists( $validation_path ) ) {
+			unlink( $validation_path );
+		}
 	}
 
 	return array(
@@ -191,20 +181,6 @@ function anyape_wp_test_tools_build_wp_config( string $contents ): string {
 	$contents     = substr_replace( $contents, $ddev_include, $settings[0][1], 0 );
 
 	return $contents;
-}
-
-/**
- * Fail when a PHP file does not pass the host PHP syntax check.
- *
- * @param string $path PHP file path.
- * @throws RuntimeException When PHP reports invalid syntax.
- */
-function anyape_wp_test_tools_assert_php_syntax( string $path ): void {
-	$command = escapeshellarg( PHP_BINARY ) . ' -l ' . escapeshellarg( $path ) . ' 2>&1';
-	exec( $command, $output, $status );
-	if ( 0 !== $status ) {
-		throw new RuntimeException( 'PHP syntax check failed: ' . implode( ' ', $output ) );
-	}
 }
 
 if ( realpath( (string) ( $argv[0] ?? '' ) ) === __FILE__ ) {
