@@ -16,14 +16,7 @@ done < <(
 	php -r '
 		require $argv[1];
 		$config = require $argv[2];
-		foreach (
-			array(
-				$wp_version,
-				$config["test_database"],
-				$config["database_host"],
-				$config["table_prefix"],
-			) as $value
-		) {
+		foreach (array($wp_version, $config["test_database"], $config["database_host"], $config["table_prefix"]) as $value) {
 			fwrite(STDOUT, (string) $value . "\0");
 		}
 	' "$ROOT_DIR/wp-includes/version.php" "$CONFIG_FILE"
@@ -101,5 +94,4 @@ php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/configure-wordpress-tests.php" \
 	"$TABLE_PREFIX"
 
 printf '%s\n' "$WP_VERSION" > "$STATE_FILE"
-
 echo "WordPress test environment synchronized to $WP_VERSION."
