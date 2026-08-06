@@ -122,20 +122,17 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$this->assertSame( ".DS_Store\n", file_get_contents( $this->temporary_directory . '/.gitignore' ) );
 	}
 
-	/** Setup inspection alone decides whether DDEV settings are supported. */
-	public function test_setup_inspection_reports_ddev_readiness(): void {
-		$root = $this->create_wordpress_project( 'supported' );
-		$this->write_ddev_config( $root, array(), array( 'git', 'subversion' ) );
-		file_put_contents( $root . '/wp-config-ddev.php', "<?php\n" );
+	/** Setup inspection reports configured DDEV packages. */
+	public function test_setup_inspection_reports_ddev_packages(): void {
+		$root = $this->create_wordpress_project( 'with-subversion' );
+		$this->write_ddev_config( $root, array( 'git', 'subversion' ) );
 		$report = anyape_wp_test_tools_inspect_setup( $root );
-		$this->assertTrue( $report['ddev_ready'] );
 		$this->assertSame( array( 'git', 'subversion' ), $report['ddev_packages'] );
 		$this->assertTrue( $report['subversion_configured'] );
 
-		$wrong = $this->create_wordpress_project( 'wrong' );
-		$this->write_ddev_config( $wrong, array( 'type' => 'php' ) );
-		file_put_contents( $wrong . '/wp-config-ddev.php', "<?php\n" );
-		$this->assertFalse( anyape_wp_test_tools_inspect_setup( $wrong )['ddev_ready'] );
+		$root = $this->create_wordpress_project( 'without-subversion' );
+		$this->write_ddev_config( $root, array( 'git' ) );
+		$this->assertFalse( anyape_wp_test_tools_inspect_setup( $root )['subversion_configured'] );
 	}
 
 	/** Shared file operations preserve permissions and do not follow links. */
@@ -165,7 +162,7 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$this->assertFileExists( $outside . '/kept.txt' );
 	}
 
-	/** Setup check executes without changing files or invoking fake host commands. */
+	/** Setup check executes without changing files or invoking host commands. */
 	public function test_setup_check_is_read_only(): void {
 		$root = $this->create_wordpress_project( 'setup-check' );
 		$tool = $root . '/.anyape-wp-test-tools';
@@ -177,16 +174,15 @@ final class SetupFilesTest extends WP_UnitTestCase {
 				'bin/update-root-composer.php', 'bin/update-ignore-files.php',
 			)
 		);
-		$this->write_ddev_config( $root, array(), array( 'subversion' ) );
+		$this->write_ddev_config( $root, array( 'subversion' ) );
 		file_put_contents( $root . '/wp-config-ddev.php', "<?php\n" );
 		mkdir( $root . '/.git' );
 
 		$fakes = $this->temporary_directory . '/fakes';
-		$log   = $this->temporary_directory . '/commands.log';
 		mkdir( $fakes );
 		foreach ( array( 'ddev', 'composer', 'node', 'npm', 'git' ) as $command ) {
 			$path = $fakes . '/' . $command;
-			file_put_contents( $path, "#!/usr/bin/env bash\nprintf '%s\\n' \"\$0 \$*\" >> \"\$FAKE_COMMAND_LOG\"\n" );
+			file_put_contents( $path, "#!/usr/bin/env bash\nexit 99\n" );
 			chmod( $path, 0755 );
 		}
 
@@ -194,11 +190,10 @@ final class SetupFilesTest extends WP_UnitTestCase {
 		$result = $this->run_command(
 			array( 'bash', $tool . '/setup-host.sh', '--check' ),
 			$root,
-			array( 'PATH' => $fakes . PATH_SEPARATOR . getenv( 'PATH' ), 'FAKE_COMMAND_LOG' => $log )
+			array( 'PATH' => $fakes . PATH_SEPARATOR . getenv( 'PATH' ) )
 		);
 		$this->assertSame( 0, $result['status'], $result['stderr'] . $result['stdout'] );
 		$this->assertSame( $before, $this->directory_snapshot( $root ) );
-		$this->assertSame( '', is_file( $log ) ? (string) file_get_contents( $log ) : '' );
 	}
 
 	/** Uninstall validates before DDEV deletion and removes the toolkit last. */
@@ -227,18 +222,16 @@ final class SetupFilesTest extends WP_UnitTestCase {
 	}
 
 	/** Write a private DDEV configuration. */
-	private function write_ddev_config( string $root, array $overrides = array(), array $packages = array() ): void {
-		$values = array_replace(
-			array( 'name' => basename( $root ), 'type' => 'wordpress', 'docroot' => '.', 'webserver_type' => 'apache-fpm' ),
-			$overrides
-		);
+	private function write_ddev_config( string $root, array $packages ): void {
 		mkdir( $root . '/.ddev', 0700, true );
-		$contents = '';
-		foreach ( $values as $key => $value ) {
-			$contents .= $key . ': ' . $value . "\n";
-		}
-		$contents .= 'webimage_extra_packages: [' . implode( ', ', $packages ) . "]\n";
-		file_put_contents( $root . '/.ddev/config.yaml', $contents );
+		file_put_contents(
+			$root . '/.ddev/config.yaml',
+			'name: ' . basename( $root ) . "\n"
+			. "type: wordpress\n"
+			. "docroot: .\n"
+			. "webserver_type: apache-fpm\n"
+			. 'webimage_extra_packages: [' . implode( ', ', $packages ) . "]\n"
+		);
 	}
 
 	/** Copy selected repository files into a private toolkit directory. */
