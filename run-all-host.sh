@@ -20,7 +20,8 @@ done
 # shellcheck disable=SC1091
 source "$ANYAPE_WP_TEST_TOOLS_DIR/logging-host.sh"
 export ANYAPE_WP_TEST_TOOLS_VERBOSE="$VERBOSE"
-anyape_wp_test_tools_log_initialize "$ANYAPE_WP_TEST_TOOLS_DIR" test
+anyape_wp_test_tools_log_initialize "$ANYAPE_WP_TEST_TOOLS_DIR" test 1
+export ANYAPE_WP_TEST_TOOLS_LOG_FILE
 if [[ "$ANYAPE_WP_TEST_TOOLS_LOG_OWNER" == "1" ]]; then
 	if ((VERBOSE)); then
 		echo "Detailed test output will be shown and saved to: $ANYAPE_WP_TEST_TOOLS_LOG_FILE"
