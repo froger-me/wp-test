@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$TOOLKIT_DIR")"
+ANYAPE_WP_TEST_TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$ANYAPE_WP_TEST_TOOLS_DIR")"
 ACTION="${1:-}"
 LOG_PATH="$PROJECT_ROOT/wp-content/debug.log"
 
@@ -27,7 +27,7 @@ esac
 
 cd "$PROJECT_ROOT"
 
-php "$TOOLKIT_DIR/bin/validate-debug-log.php" \
+php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/validate-debug-log.php" \
 	"$PROJECT_ROOT/wp-config.php" \
 	"$LOG_PATH"
 

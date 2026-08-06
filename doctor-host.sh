@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$TOOLKIT_DIR")"
+ANYAPE_WP_TEST_TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$ANYAPE_WP_TEST_TOOLS_DIR")"
 
 cd "$PROJECT_ROOT"
 
@@ -19,5 +19,5 @@ fi
 
 exec ddev exec --raw env \
 	XDEBUG_MODE=off \
-	php /var/www/html/.test-tools/bin/doctor.php \
+	php /var/www/html/.anyape-wp-test-tools/bin/doctor.php \
 	"$@"

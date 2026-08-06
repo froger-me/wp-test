@@ -2,26 +2,26 @@
 /**
  * Bootstrap the WordPress integration test environment.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-use WpTest\HttpMock;
-use WpTest\Lifecycle;
-use WpTest\Manifest;
+use AnyapeWPTestTools\HttpMock;
+use AnyapeWPTestTools\Lifecycle;
+use AnyapeWPTestTools\Manifest;
 
-$toolkit_root = __DIR__;
-$project_root = dirname( __DIR__ );
-$tests_dir    = $toolkit_root . '/wordpress-tests-lib';
-$runtime_dir  = $toolkit_root . '/runtime';
-$content_dir  = $runtime_dir . '/wp-content';
-$polyfills    = $toolkit_root . '/vendor/yoast/phpunit-polyfills';
+$anyape_wp_test_tools_root = __DIR__;
+$project_root              = dirname( __DIR__ );
+$tests_dir                 = $anyape_wp_test_tools_root . '/wordpress-tests-lib';
+$runtime_dir               = $anyape_wp_test_tools_root . '/runtime';
+$content_dir               = $runtime_dir . '/wp-content';
+$polyfills                 = $anyape_wp_test_tools_root . '/vendor/yoast/phpunit-polyfills';
 
-require $toolkit_root . '/vendor/autoload.php';
-require $toolkit_root . '/autoload.php';
+require $anyape_wp_test_tools_root . '/vendor/autoload.php';
+require $anyape_wp_test_tools_root . '/autoload.php';
 
-$config   = require $toolkit_root . '/config.php';
+$config   = require $anyape_wp_test_tools_root . '/config.php';
 $manifest = Manifest::from_file( $runtime_dir . '/manifest.json' );
 
 if ( ! is_file( $tests_dir . '/includes/functions.php' ) ) {
@@ -32,17 +32,17 @@ if ( ! is_file( $tests_dir . '/includes/functions.php' ) ) {
 
 if ( ! is_dir( $polyfills ) ) {
 	throw new RuntimeException(
-		'PHPUnit Polyfills are missing. Run Composer install in .test-tools.'
+		'PHPUnit Polyfills are missing. Run Composer install in .anyape-wp-test-tools.'
 	);
 }
 
 if (
-	( $config['test_database'] ?? null ) !== 'wp_tests' ||
+	( $config['test_database'] ?? null ) !== 'anyape_wp_test_tools' ||
 	( $config['database_host'] ?? null ) !== 'db' ||
-	( $config['table_prefix'] ?? null ) !== 'wptests_'
+	( $config['table_prefix'] ?? null ) !== 'anyape_wptt_'
 ) {
 	throw new RuntimeException(
-		'Unsafe test database configuration; expected wp_tests on db with prefix wptests_.'
+		'Unsafe test database configuration; expected anyape_wp_test_tools on db with prefix anyape_wptt_.'
 	);
 }
 
@@ -130,9 +130,9 @@ update_option( 'template', $template );
 
 $administrator_id = wp_insert_user(
 	array(
-		'user_login' => 'wp-test-administrator',
+		'user_login' => 'anyape-wp-test-tools-administrator',
 		'user_pass'  => wp_generate_password( 32, true, true ),
-		'user_email' => 'wp-test-administrator@example.test',
+		'user_email' => 'anyape-wp-test-tools-administrator@example.test',
 		'role'       => 'administrator',
 	)
 );

@@ -2,18 +2,18 @@
 /**
  * Build the runtime PHPUnit configuration.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-use WpTest\Manifest;
+use AnyapeWPTestTools\Manifest;
 
-$toolkit_root = dirname( __DIR__ );
-$runtime_root = $toolkit_root . '/runtime';
+$anyape_wp_test_tools_root = dirname( __DIR__ );
+$runtime_root              = $anyape_wp_test_tools_root . '/runtime';
 
-require $toolkit_root . '/vendor/autoload.php';
-require $toolkit_root . '/autoload.php';
+require $anyape_wp_test_tools_root . '/vendor/autoload.php';
+require $anyape_wp_test_tools_root . '/autoload.php';
 
 $manifest = Manifest::from_file( $runtime_root . '/manifest.json' );
 
@@ -23,7 +23,7 @@ $escape = static fn ( string $value ): string =>
 $suites   = array();
 $suites[] = sprintf(
 	"\t\t<testsuite name=\"Harness\">\n\t\t\t<directory suffix=\"Test.php\">%s</directory>\n\t\t</testsuite>",
-	$escape( $toolkit_root . '/tests' )
+	$escape( $anyape_wp_test_tools_root . '/tests' )
 );
 
 $coverage_directories = array();
@@ -65,7 +65,7 @@ foreach ( array_merge( $manifest->plugins(), $manifest->themes() ) as $extension
 
 $excluded_groups = array();
 
-if ( getenv( 'WP_TEST_INCLUDE_DESTRUCTIVE' ) !== '1' ) {
+if ( getenv( 'ANYAPE_WP_TEST_TOOLS_INCLUDE_DESTRUCTIVE' ) !== '1' ) {
 	$excluded_groups[] = 'destructive';
 }
 
@@ -73,7 +73,7 @@ if ( 'harness' !== $manifest->profile() ) {
 	$excluded_groups[] = 'harness-fixture';
 }
 
-if ( '1' !== getenv( 'WP_TEST_COVERAGE' ) ) {
+if ( '1' !== getenv( 'ANYAPE_WP_TEST_TOOLS_COVERAGE' ) ) {
 	$excluded_groups[] = 'coverage';
 }
 
@@ -97,9 +97,9 @@ if ( array() !== $excluded_groups ) {
 
 $coverage = '';
 
-if ( '1' === getenv( 'WP_TEST_COVERAGE' ) ) {
+if ( '1' === getenv( 'ANYAPE_WP_TEST_TOOLS_COVERAGE' ) ) {
 	if ( array() === $coverage_directories ) {
-		$coverage_directories[] = $toolkit_root . '/src';
+		$coverage_directories[] = $anyape_wp_test_tools_root . '/src';
 	}
 
 	$includes = array_map(
@@ -135,7 +135,7 @@ $xml = sprintf(
 %s%s
 </phpunit>
 XML,
-	$escape( $toolkit_root . '/bootstrap.php' ),
+	$escape( $anyape_wp_test_tools_root . '/bootstrap.php' ),
 	implode( "\n", $suites ),
 	'' !== $groups ? "\n" . $groups : '',
 	$coverage

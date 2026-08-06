@@ -2,24 +2,24 @@
 /**
  * Build the runtime test manifest.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-use WpTest\ManifestBuilder;
+use AnyapeWPTestTools\ManifestBuilder;
 
-$toolkit_root = dirname( __DIR__ );
-$project_root = dirname( $toolkit_root );
+$anyape_wp_test_tools_root = dirname( __DIR__ );
+$project_root              = dirname( $anyape_wp_test_tools_root );
 
-require $toolkit_root . '/vendor/autoload.php';
-require $toolkit_root . '/autoload.php';
+require $anyape_wp_test_tools_root . '/vendor/autoload.php';
+require $anyape_wp_test_tools_root . '/autoload.php';
 
 $options = getopt( '', array( 'profile:', 'target::' ) );
 $profile = isset( $options['profile'] ) ? (string) $options['profile'] : 'default';
 $target  = isset( $options['target'] ) ? (string) $options['target'] : null;
 
-$runtime_dir    = $toolkit_root . '/runtime';
+$runtime_dir    = $anyape_wp_test_tools_root . '/runtime';
 $state_file     = $runtime_dir . '/working-site.json';
 $active_plugins = array();
 $stylesheet     = '';
@@ -58,7 +58,7 @@ if ( 'harness' !== $profile ) {
 }
 
 $configuration      = array();
-$configuration_file = $project_root . '/.wp-test.php';
+$configuration_file = $project_root . '/.anyape-wp-test-tools.php';
 
 if ( is_file( $configuration_file ) ) {
 	$configuration = require $configuration_file;
@@ -74,7 +74,7 @@ if ( is_file( $configuration_file ) ) {
 }
 
 try {
-	$builder  = new ManifestBuilder( $project_root, $toolkit_root, $configuration );
+	$builder  = new ManifestBuilder( $project_root, $anyape_wp_test_tools_root, $configuration );
 	$manifest = $builder->build(
 		$profile,
 		$target,

@@ -2,16 +2,16 @@
 
 ## Purpose
 
-This repository is installed as `.test-tools` inside an existing complete WordPress root. Its parent directory is the consuming WordPress installation.
+This repository is installed as `.anyape-wp-test-tools` inside an existing complete WordPress root. Its parent directory is the consuming WordPress installation.
 
 The goal is a lightweight, deterministic local test and development utility surface for plugin and theme combinations, using DDEV for runtime isolation and conventional project commands such as `composer test` and `composer tail:log`.
 
 ## Non-negotiable rules
 
-1. PHPUnit uses only database `wp_tests` with prefix `wptests_`. Never run destructive tests against working database `db`.
+1. PHPUnit uses only database `anyape_wp_test_tools` with prefix `anyape_wptt_`. Never run destructive tests against working database `db`.
 2. External services are blocked by default. Add explicit mocks or separately named opt-in integration commands; never weaken the default block to make a test pass.
-3. Routine commands must not call DDEV start, stop, restart, rebuild, or configuration commands. Environment lifecycle remains explicit. The guided `composer setup` command may configure and start DDEV because that is its stated purpose and every lasting change is reported or confirmed. `composer test:e2e` may call DDEV's database snapshot and restore commands; DDEV may recreate service containers internally while restoring a snapshot.
-4. Every public Composer command must be available with the same name and behavior from both the consuming WordPress root and the `.test-tools` directory.
+3. Routine commands must not call DDEV start, stop, restart, rebuild, or configuration commands. Environment lifecycle remains explicit. The guided `composer setup` command may configure and start DDEV because that is its stated purpose and every lasting change is reported or confirmed. The destructive `composer anyape-wp-test-tools:uninstall` command may delete only the current associated DDEV project after its exact confirmation. `composer test:e2e` may call DDEV's database snapshot and restore commands; DDEV may recreate service containers internally while restoring a snapshot.
+4. Every public Composer command must be available with the same name and behavior from both the consuming WordPress root and the `.anyape-wp-test-tools` directory.
 5. Developers must not need to enter `ddev sh` for normal work. Host wrappers may use `ddev wp` or `ddev exec`, but not lifecycle or configuration commands.
 6. Never add site-specific domains, absolute user paths, SSH aliases, secrets, passwords, API keys, buckets, or service credentials.
 7. Never silently alter the consuming site's persistent database, active plugin set, theme, uploads, or source files. A command that intentionally changes a local file, such as `composer clear:log`, must be narrowly scoped and documented.
@@ -24,8 +24,8 @@ The GitHub CI prohibition is unconditional. Do not infer permission from a plan,
 
 ```text
 <wordpress-root>/
-├── .test-tools/                 # this repository
-├── .wp-test.php                 # optional consuming-site configuration
+├── .anyape-wp-test-tools/                 # this repository
+├── .anyape-wp-test-tools.php                 # optional consuming-site configuration
 ├── wp-admin/
 ├── wp-content/
 ├── wp-includes/
@@ -34,25 +34,26 @@ The GitHub CI prohibition is unconditional. Do not infer permission from a plan,
 
 Expected paths and state:
 
-- toolkit root: `.test-tools`;
-- WordPress root: parent of `.test-tools`;
+- Anyape WP Test Tools root: `.anyape-wp-test-tools`;
+- WordPress root: parent of `.anyape-wp-test-tools`;
 - plugins: `wp-content/plugins`;
 - must-use plugins: `wp-content/mu-plugins`;
 - themes: `wp-content/themes`;
 - local WordPress debug log: `wp-content/debug.log`;
 - working database: `db`;
-- PHPUnit database: `wp_tests`;
-- PHPUnit table prefix: `wptests_`;
-- generated runtime overlay: `.test-tools/runtime/wp-content`.
+- PHPUnit database: `anyape_wp_test_tools`;
+- PHPUnit table prefix: `anyape_wptt_`;
+- generated runtime overlay: `.anyape-wp-test-tools/runtime/wp-content`.
 
 Add one documented configuration entry point when a path needs to become configurable. Do not scatter project-specific checks across scripts.
 
 ## Public command contract
 
-Current public commands are exposed from both the consuming WordPress root and `.test-tools`:
+Current public commands are exposed from both the consuming WordPress root and `.anyape-wp-test-tools`:
 
 ```text
 composer setup
+composer anyape-wp-test-tools:uninstall
 composer doctor
 composer lint:wpcs
 composer format:wpcs
@@ -74,20 +75,21 @@ composer test:junit
 composer test:e2e
 ```
 
-The toolkit's `composer.json` owns the `.test-tools` command mappings. The consuming root `composer.json` mirrors the same command names for convenience. The shell wrappers are the behavioral source of truth.
+Anyape WP Test Tools' `composer.json` owns the `.anyape-wp-test-tools` command mappings. The consuming root `composer.json` mirrors the same command names for convenience. The shell wrappers are the behavioral source of truth.
 
 Rules:
 
 - host wrappers must resolve the WordPress root from their own location and must not depend on the caller's current working directory;
-- `composer setup` must remain usable through `bash .test-tools/setup-host.sh` before dependencies or a root Composer file exist;
+- `composer setup` must remain usable through `bash .anyape-wp-test-tools/setup-host.sh` before dependencies or a root Composer file exist;
 - setup file inspection must not return existing configuration values, and setup writers must use backups, temporary files, validation, and restoration on failure;
 - `composer setup -- --check` must not change files, packages, services, or databases;
 - `composer setup -- --yes` still requires an explicit database choice and must not decide deployment policy or optional project configuration;
+- `composer anyape-wp-test-tools:uninstall` must validate a backup-independent `wp-config.php` reversal before deletion, list every removal category, require the exact typed confirmation, delete only the current associated DDEV project, preserve unrelated shared-file entries, and remove `.anyape-wp-test-tools` last;
 - preserve native PHPUnit argument passthrough from both Composer locations;
-- `composer test` runs the default PHP tests followed by browser tests and rejects runner-specific arguments;
+- `composer test` runs the default PHP tests followed by browser tests, accepts only `-v` or `--verbose` for live detailed output, and rejects runner-specific arguments;
 - keep command names, profiles, exit codes, and side effects identical in both locations;
 - invalid profiles and slugs fail before PHPUnit starts;
-- commands never manage DDEV lifecycle;
+- commands never manage DDEV lifecycle except the explicitly guided setup and complete uninstall commands;
 - `composer doctor` is read-only;
 - `composer tail:log` and `composer clear:log` operate only on the local `wp-content/debug.log` after validating local WordPress logging configuration and writability;
 - destructive tests remain excluded unless explicitly requested;
@@ -98,7 +100,7 @@ Rules:
 
 ## Browser-test architecture
 
-Playwright runs on the host against the address reported by the already-running DDEV project. Node packages remain in `.test-tools/node_modules`.
+Playwright runs on the host against the address reported by the already-running DDEV project. Node packages remain in `.anyape-wp-test-tools/node_modules`.
 
 Every browser run follows this sequence:
 
@@ -106,13 +108,13 @@ Every browser run follows this sequence:
 2. save `wp-content/uploads`, `wp-content/mu-plugins`, and configured extra paths;
 3. export and measure working database `db`, then create a temporary DDEV database snapshot;
 4. create dedicated users and repeatable content after the snapshot, then sign them in through a random value valid only during this run rather than the site's normal login form;
-5. run toolkit and selected extension tests in Chromium;
+5. run Anyape WP Test Tools and selected extension tests in Chromium;
 6. restore the database and saved files from an exit handler without deleting existing top-level protected directories that DDEV may have mounted; and
 7. compare the restored database and files with their saved state.
 
-Extension tests use `wp-content/plugins/<slug>/tests/e2e/**/*.spec.ts` and `wp-content/themes/<slug>/tests/e2e/**/*.spec.ts`. An extension may add `tests/e2e/fixtures.php`; it runs with WordPress fully loaded after the snapshot. The root `.wp-test.php` file may name `e2e_bootstrap` and extra `e2e_filesystem_paths` below `wp-content`.
+Extension tests use `wp-content/plugins/<slug>/tests/e2e/**/*.spec.ts` and `wp-content/themes/<slug>/tests/e2e/**/*.spec.ts`. An extension may add `tests/e2e/fixtures.php`; it runs with WordPress fully loaded after the snapshot. The root `.anyape-wp-test-tools.php` file may name `e2e_bootstrap` and extra `e2e_filesystem_paths` below `wp-content`.
 
-The temporary must-use plugin defines `WP_TEST_E2E` and blocks outgoing WordPress HTTP calls except local, loopback, and Mailpit requests. Extensions must replace CAPTCHA, payments, storage, webhooks, and update checks with local behavior when this constant is true. Browser automation must never solve a real CAPTCHA or use real payment or storage credentials.
+The temporary must-use plugin defines `ANYAPE_WP_TEST_TOOLS_E2E` and blocks outgoing WordPress HTTP calls except local, loopback, and Mailpit requests. Extensions must replace CAPTCHA, payments, storage, webhooks, and update checks with local behavior when this constant is true. Browser automation must never solve a real CAPTCHA or use real payment or storage credentials.
 
 Failed browser tests retain traces, screenshots, browser messages, failed requests, the test title, selected profile, and a WordPress debug-log excerpt in ignored paths.
 
@@ -127,8 +129,8 @@ Every run follows this sequence inside one DDEV container invocation:
 3. `ManifestBuilder` selects the profile and writes `runtime/manifest.json`;
 4. `prepare-runtime.php` creates an isolated `runtime/wp-content`;
 5. `sync-wordpress-tests.sh` synchronizes matching WordPress test assets;
-6. `bootstrap.php` loads selected code and runs plugin activation against `wp_tests`;
-7. generated `runtime/phpunit.xml` discovers toolkit and extension tests;
+6. `bootstrap.php` loads selected code and runs plugin activation against `anyape_wp_test_tools`;
+7. generated `runtime/phpunit.xml` discovers Anyape WP Test Tools and extension tests;
 8. PHPUnit runs.
 
 Do not bypass the preflight or lifecycle manager from a public entry point.
@@ -161,14 +163,14 @@ Selection rules:
 - focused profiles load configured dependencies but do not automatically select dependency tests;
 - missing test paths are normal;
 - malformed bootstraps fail with extension slug and path;
-- toolkit harness tests remain a separate testsuite.
+- Anyape WP Test Tools harness tests remain a separate testsuite.
 
 ## Consuming-site configuration
 
 Optional root file:
 
 ```text
-<wordpress-root>/.wp-test.php
+<wordpress-root>/.anyape-wp-test-tools.php
 ```
 
 It may define:
@@ -186,7 +188,7 @@ Keep this surface small. New keys require validation, documentation, examples, a
 ## Lifecycle and data safety
 
 - Plugin activation uses WordPress's activation API, not direct ad hoc hook calls.
-- Activation, deactivation, and uninstall helpers must assert `DB_NAME === 'wp_tests'` and prefix `wptests_`.
+- Activation, deactivation, and uninstall helpers must assert `DB_NAME === 'anyape_wp_test_tools'` and prefix `anyape_wptt_`.
 - Activation failures must identify the plugin and include captured output when available.
 - Activation must support options, custom tables, roles, cron, rewrite rules, and isolated uploads.
 - Multisite profile activation is network-wide.
@@ -195,22 +197,22 @@ Keep this surface small. New keys require validation, documentation, examples, a
 - Test uploads and plugin-generated content belong under the runtime overlay.
 - Never write fixtures into the consuming site's real plugin, theme, or upload directories.
 - `composer clear:log` may truncate only the validated local `wp-content/debug.log`; it must not delete it or target configurable remote paths.
-- `composer db:pull` may replace only database `db`, must take a snapshot first, and must use the ignored `db-refresh.local.php` file. It must confirm the remote source and local destination before changing data.
-- `composer reset:tests` may drop and recreate only database `wp_tests`. `composer restore` may restore only an explicitly named local DDEV snapshot. Both require confirmation unless the caller deliberately passes `--yes`.
+- `composer db:pull` may replace only database `db`, must take a snapshot first, and must use the ignored `db-refresh-local.php` file. It must confirm the remote source and local destination before changing data.
+- `composer reset:tests` may drop and recreate only database `anyape_wp_test_tools`. `composer restore` may restore only an explicitly named local DDEV snapshot. Both require confirmation unless the caller deliberately passes `--yes`.
 - Remote database exports must stream through the configured SSH alias, use compression and a large packet limit, and pass archive verification before local data changes. Connection secrets must remain in the user's SSH configuration.
 
 ## External services
 
 - The priority-10 HTTP blocker must remain installed.
-- `WpTest\HttpMock` may preempt it at priority 5.
+- `AnyapeWPTestTools\HttpMock` may preempt it at priority 5.
 - Generic mocks may cover arrays, `WP_Error`, malformed JSON, rate limits, delays, and sequences.
-- Do not add provider-specific SDKs, clients, or credentials to the toolkit.
+- Do not add provider-specific SDKs, clients, or credentials to Anyape WP Test Tools.
 - Real sandbox calls require a distinct future opt-in command and ignored local credentials.
 - Ordinary `composer test` must remain offline-safe.
 
 ## Helper surface
 
-`WpTest\IntegrationTestCase` is intentionally small. Keep plugin-specific business logic in plugin tests.
+`AnyapeWPTestTools\IntegrationTestCase` is intentionally small. Keep plugin-specific business logic in plugin tests.
 
 Supported helper categories:
 
@@ -305,28 +307,28 @@ For PHP or shell changes, perform at least:
 
 ```bash
 (
-  cd .test-tools
+  cd .anyape-wp-test-tools
   git ls-files --cached --others --exclude-standard -z -- '*.php' |
     while IFS= read -r -d '' file; do
       [[ ! -f "$file" ]] || php -l "$file" || exit
     done
 )
 (
-  cd .test-tools
+  cd .anyape-wp-test-tools
   git ls-files --cached --others --exclude-standard -z -- '*.sh' |
     while IFS= read -r -d '' file; do
       [[ ! -f "$file" ]] || bash -n "$file" || exit
     done
 )
-python3 -m json.tool .test-tools/composer.json >/dev/null
+python3 -m json.tool .anyape-wp-test-tools/composer.json >/dev/null
 composer lint:wpcs
 composer doctor
 composer test:harness
 composer test:php
-(cd .test-tools && composer doctor)
-(cd .test-tools && composer test:harness)
+(cd .anyape-wp-test-tools && composer doctor)
+(cd .anyape-wp-test-tools && composer test:harness)
 composer test
-(cd .test-tools && composer test)
+(cd .anyape-wp-test-tools && composer test)
 ```
 
 Run specialist commands when changed:
@@ -343,7 +345,7 @@ For logging changes, additionally verify:
 
 ```bash
 composer clear:log
-(cd .test-tools && composer clear:log)
+(cd .anyape-wp-test-tools && composer clear:log)
 ```
 
 Start `composer tail:log` from both supported directories, append a line to `wp-content/debug.log`, confirm it appears immediately, and stop the command with `Ctrl+C` without stopping DDEV.

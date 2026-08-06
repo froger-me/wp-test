@@ -2,22 +2,24 @@
 
 set -euo pipefail
 
-TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$TOOLKIT_DIR")"
+ANYAPE_WP_TEST_TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$ANYAPE_WP_TEST_TOOLS_DIR")"
 CHECK_ONLY=0
 YES=0
 RUN_TESTS=0
 DATABASE_CHOICE=""
+VERBOSE=0
 
 for argument in "$@"; do
 	case "$argument" in
 		--check) CHECK_ONLY=1 ;;
 		--yes) YES=1 ;;
 		--run-tests) RUN_TESTS=1 ;;
+		-v|--verbose) VERBOSE=1 ;;
 		--database=keep|--database=clean|--database=pull) DATABASE_CHOICE="${argument#*=}" ;;
 		*)
 			echo "ERROR: Unknown setup option '$argument'." >&2
-			echo "Usage: bash .test-tools/setup-host.sh [--check] [--yes] [--database=keep|clean|pull] [--run-tests]" >&2
+			echo "Usage: bash .anyape-wp-test-tools/setup-host.sh [-v|--verbose] [--check] [--yes] [--database=keep|clean|pull] [--run-tests]" >&2
 			exit 1
 			;;
 	esac
@@ -30,13 +32,20 @@ for command_name in php ddev composer node npm git; do
 	fi
 done
 
-REPORT_FILE="$(mktemp "${TMPDIR:-/tmp}/wp-test-setup.XXXXXX")"
+REPORT_FILE="$(mktemp "${TMPDIR:-/tmp}/anyape-wp-test-tools-setup.XXXXXX")"
 cleanup_setup_report() {
+	local status=$?
 	rm -f "$REPORT_FILE"
+	anyape_wp_test_tools_report_log
+	return "$status"
 }
 trap cleanup_setup_report EXIT INT TERM HUP
 
-php "$TOOLKIT_DIR/bin/inspect-setup.php" "$PROJECT_ROOT" > "$REPORT_FILE"
+# The path is resolved from this script's directory.
+# shellcheck disable=SC1091
+source "$ANYAPE_WP_TEST_TOOLS_DIR/logging-host.sh"
+
+php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/inspect-setup.php" "$PROJECT_ROOT" > "$REPORT_FILE"
 
 report_value() {
 	php -r '$data=json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR); $value=$data[$argv[2]] ?? null; if (is_bool($value)) { echo $value ? "1" : "0"; } elseif (is_array($value)) { echo implode(",", $value); } elseif ($value !== null) { echo $value; }' "$REPORT_FILE" "$1"
@@ -53,10 +62,17 @@ confirm_change() {
 	[[ "$answer" == "y" || "$answer" == "Y" || "$answer" == "yes" || "$answer" == "YES" ]]
 }
 
+print_step() {
+	echo
+	echo "=== $1 ==="
+	echo
+}
+
 copy_optional_config() {
 	local source="$1"
 	local destination="$2"
 	local label="$3"
+	local explanation="$4"
 	if [[ -f "$destination" ]]; then
 		echo "Complete: $label already exists."
 		return
@@ -65,6 +81,9 @@ copy_optional_config() {
 		echo "Manual: $label was not created because it needs project-specific choices."
 		return
 	fi
+	echo "$explanation"
+	echo "The new file will contain examples only. You can edit or remove it later."
+	echo
 	if confirm_change "Create the $label example now?"; then
 		cp "$source" "$destination"
 		echo "Created $destination; edit its placeholder values before use."
@@ -74,26 +93,40 @@ copy_optional_config() {
 }
 
 check_file_update() {
-	local label="$1"
-	shift
+	local pending_label="$1"
+	local complete_label="$2"
+	shift 2
 	local result
 	if result="$("$@" 2>&1)"; then
 		local changed
 		changed="$(php -r '$data=json_decode($argv[1], true, 512, JSON_THROW_ON_ERROR); echo !empty($data["changed"]) ? "1" : "0";' "$result")"
 		if [[ "$changed" == "1" ]]; then
-			echo "Pending: $label"
+			echo "Pending: $pending_label"
 		else
-			echo "Complete: $label"
+			echo "Complete: $complete_label"
 		fi
 	else
-		echo "Manual: $label"
+		echo "Manual: could not check whether $pending_label"
 		echo "$result" >&2
 	fi
 }
 
+file_update_needed() {
+	local result
+	result="$("$@")"
+	php -r '$data=json_decode($argv[1], true, 512, JSON_THROW_ON_ERROR); echo !empty($data["changed"]) ? "1" : "0";' "$result"
+}
+
+ddev_project_running() {
+	local result
+	if ! result="$(ddev describe -j 2>/dev/null)"; then
+		return 1
+	fi
+	php -r '$data=json_decode($argv[1], true); $services=$data["raw"]["services"] ?? array(); exit((($services["web"]["status"] ?? "") === "running" && ($services["db"]["status"] ?? "") === "running") ? 0 : 1);' "$result"
+}
+
 echo "WordPress guided setup"
 echo "Project: $PROJECT_ROOT"
-echo
 
 if [[ "$(report_value wordpress_valid)" != "1" ]]; then
 	echo "ERROR: This is not a complete WordPress directory. Missing: $(report_value missing_paths)" >&2
@@ -105,24 +138,40 @@ if [[ "$(report_value ddev_config_exists)" != "1" || "$(report_value ddev_wordpr
 fi
 
 WP_CONFIG_STATUS="$(php -r '$d=json_decode(file_get_contents($argv[1]),true); echo $d["wp_config"]["status"];' "$REPORT_FILE")"
-echo "wp-config.php: $WP_CONFIG_STATUS"
-echo "DDEV Subversion package: $([[ "$(report_value subversion_configured)" == "1" ]] && echo configured || echo missing)"
-echo "Root composer.json: $([[ "$(report_value root_composer_exists)" == "1" ]] && echo present || echo missing)"
+case "$WP_CONFIG_STATUS" in
+	ready) WP_CONFIG_DESCRIPTION="ready for local DDEV use" ;;
+	update) WP_CONFIG_DESCRIPTION="needs a guided change" ;;
+	manual) WP_CONFIG_DESCRIPTION="needs a manual review" ;;
+	*) WP_CONFIG_DESCRIPTION="unknown state" ;;
+esac
+print_step "Current project state"
+echo "WordPress settings (wp-config.php): $WP_CONFIG_DESCRIPTION"
+echo "Subversion program inside DDEV: $([[ "$(report_value subversion_configured)" == "1" ]] && echo configured || echo missing)"
+echo "Project composer.json: $([[ "$(report_value root_composer_exists)" == "1" ]] && echo present || echo missing)"
 echo "Project .gitignore: $([[ "$(report_value root_gitignore_exists)" == "1" ]] && echo present || echo missing)"
-echo "SFTP configuration: $([[ "$(report_value sftp_config_exists)" == "1" ]] && echo present || echo absent)"
+echo "File-upload settings (.vscode/sftp.json): $([[ "$(report_value sftp_config_exists)" == "1" ]] && echo present || echo absent)"
 
 if ((CHECK_ONLY)); then
-	echo
-	check_file_update "wp-config.php needs an approved update." php "$TOOLKIT_DIR/bin/update-wp-config.php" --check "$PROJECT_ROOT/wp-config.php"
-	check_file_update "root composer.json needs the current public command list." php "$TOOLKIT_DIR/bin/update-root-composer.php" --check "$PROJECT_ROOT/composer.json" "$TOOLKIT_DIR/composer.json"
+	print_step "Read-only check"
+	check_file_update "WordPress settings need a guided change." "WordPress settings are ready for local DDEV use." php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-wp-config.php" --check "$PROJECT_ROOT/wp-config.php"
+	check_file_update "project composer.json needs the test commands." "project composer.json has the current test commands." php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-root-composer.php" --check "$PROJECT_ROOT/composer.json" "$ANYAPE_WP_TEST_TOOLS_DIR/composer.json"
 	if [[ "$(report_value git_mode)" == "parent" ]]; then
-		check_file_update "project .gitignore needs local setup paths." php "$TOOLKIT_DIR/bin/update-ignore-files.php" --check "$PROJECT_ROOT" git
+		check_file_update "project .gitignore needs the local-only file names." "project .gitignore excludes the local-only file names." php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-ignore-files.php" --check "$PROJECT_ROOT" git
 	fi
 	if [[ "$(report_value sftp_config_exists)" == "1" ]]; then
-		check_file_update ".vscode/sftp.json needs local deployment exclusions." php "$TOOLKIT_DIR/bin/update-ignore-files.php" --check "$PROJECT_ROOT" sftp
+		check_file_update ".vscode/sftp.json needs the local-only upload exclusions." ".vscode/sftp.json excludes the local-only files from uploads." php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-ignore-files.php" --check "$PROJECT_ROOT" sftp
 	fi
 	echo "Check complete; no files, packages, services, or databases were changed."
 	exit 0
+fi
+
+export ANYAPE_WP_TEST_TOOLS_VERBOSE="$VERBOSE"
+anyape_wp_test_tools_log_initialize "$ANYAPE_WP_TEST_TOOLS_DIR" setup
+if ((VERBOSE)); then
+	echo "Detailed command output will be shown and saved to: $ANYAPE_WP_TEST_TOOLS_LOG_FILE"
+else
+	echo "Detailed command output will be saved to: $ANYAPE_WP_TEST_TOOLS_LOG_FILE"
+	echo "Run setup with -v or --verbose to show those details while it runs."
 fi
 
 if [[ "$WP_CONFIG_STATUS" == "manual" ]]; then
@@ -131,54 +180,94 @@ if [[ "$WP_CONFIG_STATUS" == "manual" ]]; then
 	exit 1
 fi
 
+print_step "Keep local-only files out of Git"
+
 if [[ "$(report_value git_mode)" == "parent" ]]; then
-	if confirm_change "Add toolkit-local paths and backup names to the project .gitignore?"; then
-		php "$TOOLKIT_DIR/bin/update-ignore-files.php" "$PROJECT_ROOT" git
+	GIT_IGNORE_UPDATE_NEEDED="$(file_update_needed php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-ignore-files.php" --check "$PROJECT_ROOT" git)"
+	if [[ "$GIT_IGNORE_UPDATE_NEEDED" != "1" ]]; then
+		echo "Complete: project .gitignore already has the local setup paths."
 	else
-		echo "Skipped: project .gitignore."
+		echo "The project .gitignore does not yet exclude local test settings, generated files, or setup backups."
+		echo "Adding the entries prevents those files from being committed to the parent Git repository. Existing ignore rules will be kept."
+		echo
+		if confirm_change "Add these local-only names to the project .gitignore?"; then
+			php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-ignore-files.php" "$PROJECT_ROOT" git
+		else
+			echo "Skipped: project .gitignore."
+		fi
 	fi
 else
-	echo "Manual: no parent Git repository was found, so no project .gitignore was changed."
+	echo "Manual: this project is not inside a parent Git repository, so there is no project .gitignore to update."
 fi
 
 if [[ "$(report_value sftp_config_exists)" == "1" ]]; then
-	if ((YES)); then
-		echo "Manual: .vscode/sftp.json was not changed because deployment policy needs an explicit answer."
-	elif confirm_change "Add local toolkit paths and backup names to .vscode/sftp.json?"; then
-		php "$TOOLKIT_DIR/bin/update-ignore-files.php" "$PROJECT_ROOT" sftp
+	print_step "Keep local-only files out of remote uploads"
+	SFTP_UPDATE_NEEDED="$(file_update_needed php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-ignore-files.php" --check "$PROJECT_ROOT" sftp)"
+	if [[ "$SFTP_UPDATE_NEEDED" != "1" ]]; then
+		echo "Complete: .vscode/sftp.json already has the local deployment exclusions."
+	elif ((YES)); then
+		echo "Manual: .vscode/sftp.json was not changed because only you can decide what may be uploaded to the remote server."
 	else
-		echo "Skipped: .vscode/sftp.json."
+		echo "The file-upload settings do not yet exclude Anyape WP Test Tools, local settings, generated files, and setup backups."
+		echo "Adding the exclusions prevents those local-only files from being uploaded. Existing upload settings will be kept."
+		echo
+		if confirm_change "Prevent these local-only files from being uploaded?"; then
+			php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-ignore-files.php" "$PROJECT_ROOT" sftp
+		else
+			echo "Skipped: .vscode/sftp.json."
+		fi
 	fi
 fi
 
+print_step "Prepare WordPress for the local DDEV site"
+
 if [[ "$WP_CONFIG_STATUS" == "update" ]]; then
-	echo "Proposed wp-config.php changes: keep existing remote values, complete the DDEV-only database and debug arrangement, add the local debug-log path, and load wp-config-ddev.php before WordPress starts."
-	if ! confirm_change "Back up and adapt wp-config.php for DDEV?"; then
+	echo "WordPress must use DDEV's local database settings when it runs locally, while keeping the existing remote-server settings for the remote site."
+	echo "The change also sends local PHP errors to wp-content/debug.log and loads wp-config-ddev.php before WordPress starts."
+	echo "A dated copy of the current wp-config.php will be created before it is changed."
+	echo
+	if ! confirm_change "Back up wp-config.php and prepare it for the local DDEV site?"; then
 		echo "ERROR: wp-config.php setup was declined; setup cannot safely continue." >&2
 		exit 1
 	fi
-	php "$TOOLKIT_DIR/bin/update-wp-config.php" "$PROJECT_ROOT/wp-config.php"
+	php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-wp-config.php" "$PROJECT_ROOT/wp-config.php"
 else
 	echo "Complete: wp-config.php already has the supported DDEV arrangement."
 fi
 
-echo "Proposed root composer.json changes: preserve existing packages and unrelated commands, set an unlimited command timeout, and add the public .test-tools commands."
-if confirm_change "Merge all toolkit commands into the root composer.json?"; then
-	php "$TOOLKIT_DIR/bin/update-root-composer.php" "$PROJECT_ROOT/composer.json" "$TOOLKIT_DIR/composer.json"
+print_step "Add the testing commands to the project"
+
+if [[ "$(file_update_needed php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-root-composer.php" --check "$PROJECT_ROOT/composer.json" "$ANYAPE_WP_TEST_TOOLS_DIR/composer.json")" != "1" ]]; then
+	echo "Complete: project composer.json already has the current test commands."
 else
-	echo "ERROR: Root Composer command setup was declined; setup cannot continue." >&2
-	exit 1
+	echo "The project composer.json needs commands such as 'composer test', 'composer doctor', and 'composer db:pull'."
+	echo "Existing packages and unrelated commands will be kept. A dated copy will be created if the file already exists."
+	echo
+	if confirm_change "Add the Anyape WP Test Tools commands to the project composer.json?"; then
+		php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/update-root-composer.php" "$PROJECT_ROOT/composer.json" "$ANYAPE_WP_TEST_TOOLS_DIR/composer.json"
+	else
+		echo "ERROR: Adding the project test commands was declined, so setup cannot continue." >&2
+		exit 1
+	fi
 fi
 
-copy_optional_config "$TOOLKIT_DIR/wp-test.config.example.php" "$PROJECT_ROOT/.wp-test.php" ".wp-test.php project test configuration"
-copy_optional_config "$TOOLKIT_DIR/db-refresh-config-example.php" "$TOOLKIT_DIR/db-refresh.local.php" "remote database refresh configuration"
+print_step "Create optional project settings"
+
+copy_optional_config "$ANYAPE_WP_TEST_TOOLS_DIR/anyape-wp-test-tools-config-example.php" "$PROJECT_ROOT/.anyape-wp-test-tools.php" ".anyape-wp-test-tools.php plugin and theme selection file" ".anyape-wp-test-tools.php lets you include or exclude particular plugins and themes from tests and name extra local files that browser tests must restore. Most projects can keep the empty example values."
+echo
+copy_optional_config "$ANYAPE_WP_TEST_TOOLS_DIR/db-refresh-config-example.php" "$ANYAPE_WP_TEST_TOOLS_DIR/db-refresh-local.php" "remote database copy settings file" "db-refresh-local.php tells the database-copy command which remote WordPress site to copy and which local DDEV address to use. It does not contain database passwords."
+
+print_step "Prepare DDEV for the WordPress PHP tests"
 
 DDEV_RESTART_NEEDED=0
 if [[ "$(report_value subversion_configured)" != "1" ]]; then
-	if confirm_change "Add Subversion to the DDEV web image? This rebuilds the image on the next start."; then
+	echo "The official WordPress PHP test files are downloaded with the Subversion program. That program is missing inside DDEV."
+	echo "Adding it changes the programs installed in the local DDEV environment and requires one rebuild. It does not change the remote site."
+	echo
+	if confirm_change "Add Subversion and rebuild the local DDEV environment?"; then
 		EXISTING_PACKAGES="$(report_value ddev_packages)"
 		PACKAGES="${EXISTING_PACKAGES:+$EXISTING_PACKAGES,}subversion"
-		ddev config --webimage-extra-packages="$PACKAGES"
+		anyape_wp_test_tools_run_logged "Updating the local DDEV program list..." ddev config --webimage-extra-packages="$PACKAGES"
 		DDEV_RESTART_NEEDED=1
 	else
 		echo "ERROR: Subversion is required to download the matching WordPress PHP test library." >&2
@@ -188,102 +277,250 @@ else
 	echo "Complete: Subversion is already configured in DDEV."
 fi
 
-if ! ddev exec --raw true >/dev/null 2>&1; then
-	if confirm_change "Start the DDEV project now?"; then
-		ddev start
+if ((DDEV_RESTART_NEEDED)); then
+	anyape_wp_test_tools_run_logged "Restarting DDEV so Subversion is available..." ddev restart
+elif ! ddev_project_running; then
+	echo "The local DDEV site is stopped. It must be running to install the test programs and prepare the databases."
+	echo
+	if confirm_change "Start the local DDEV site now?"; then
+		anyape_wp_test_tools_run_logged "Starting the local DDEV site..." ddev start
 	else
 		echo "ERROR: DDEV must be running to finish setup." >&2
 		exit 1
 	fi
-elif ((DDEV_RESTART_NEEDED)); then
-	echo "Restarting DDEV so the confirmed Subversion package is available..."
-	ddev restart
-elif ! ddev exec --raw command -v svn >/dev/null 2>&1; then
-	if confirm_change "Subversion is configured but missing from the running container. Restart DDEV now?"; then
-		ddev restart
+fi
+
+if ! ddev exec --raw svn --version --quiet >/dev/null 2>&1; then
+	echo "Subversion is listed in the DDEV settings but is not available in the currently running local environment."
+	echo "Restarting DDEV will rebuild that local environment with Subversion installed."
+	echo
+	if confirm_change "Restart the local DDEV site now?"; then
+		anyape_wp_test_tools_run_logged "Restarting the local DDEV site..." ddev restart
 	else
 		echo "ERROR: Restart DDEV before finishing setup so Subversion is available." >&2
 		exit 1
 	fi
 fi
 
-if [[ ! -f "$TOOLKIT_DIR/vendor/autoload.php" ]]; then
-	echo "Installing toolkit PHP packages inside DDEV..."
-else
-	echo "Checking toolkit PHP packages against composer.lock..."
+if ! ddev exec --raw svn --version --quiet >/dev/null 2>&1; then
+	echo "ERROR: Subversion is still unavailable in DDEV after the project restart." >&2
+	exit 1
 fi
-ddev exec --dir=/var/www/html/.test-tools composer install
-if [[ ! -x "$TOOLKIT_DIR/node_modules/.bin/playwright" ]]; then
-	echo "Installing toolkit Node.js packages on the host..."
+
+print_step "Install the test programs"
+
+echo "This checks the exact PHP and browser-testing package versions recorded by Anyape WP Test Tools."
+echo "Packages that are already correct are left in place; missing or outdated packages are installed."
+echo
+if [[ ! -f "$ANYAPE_WP_TEST_TOOLS_DIR/vendor/autoload.php" ]]; then
+	PHP_PACKAGE_ACTION="Installing the PHP testing packages inside DDEV..."
 else
-	echo "Checking toolkit Node.js packages against package-lock.json..."
+	PHP_PACKAGE_ACTION="Checking the installed PHP testing packages..."
 fi
-npm --prefix "$TOOLKIT_DIR" install
-echo "Checking the host Chromium installation used by browser tests..."
-(
-	cd "$TOOLKIT_DIR"
-	npx playwright install chromium
-)
+anyape_wp_test_tools_run_logged "$PHP_PACKAGE_ACTION" ddev exec --dir=/var/www/html/.anyape-wp-test-tools composer install
+if [[ ! -x "$ANYAPE_WP_TEST_TOOLS_DIR/node_modules/.bin/playwright" ]]; then
+	BROWSER_PACKAGE_ACTION="Installing the browser-testing packages..."
+else
+	BROWSER_PACKAGE_ACTION="Checking the installed browser-testing packages..."
+fi
+anyape_wp_test_tools_run_logged "$BROWSER_PACKAGE_ACTION" npm --prefix "$ANYAPE_WP_TEST_TOOLS_DIR" install
+anyape_wp_test_tools_run_logged "Checking the Chromium browser used by the browser tests..." bash -c 'cd "$1" && npx playwright install chromium' setup-browser "$ANYAPE_WP_TEST_TOOLS_DIR"
+
+print_step "Choose the local WordPress database"
 
 if [[ -z "$DATABASE_CHOICE" ]]; then
 	if ((YES)); then
-		echo "ERROR: --yes requires an explicit --database=keep, --database=clean, or --database=pull choice." >&2
+		echo "ERROR: --yes cannot choose what happens to the local WordPress database." >&2
+		echo "Run again with --database=keep, --database=clean, or --database=pull after reviewing those choices in SETUP.md." >&2
 		exit 1
 	fi
-	printf 'Working database choice [keep/clean/pull]: '
-	IFS= read -r DATABASE_CHOICE
+	if ddev wp --path=/var/www/html core is-installed >/dev/null 2>&1; then
+		echo "WordPress is currently installed in the local database. Choose 'keep' unless you deliberately want to erase it or replace it with a remote copy."
+	else
+		echo "WordPress is not currently installed in the local database. Choose 'clean' for a new site or 'pull' for a copy of a remote site."
+	fi
+	echo
+	echo "Choose what the setup should do with the local working database named 'db':"
+	echo
+	echo "  keep  - Keep the current local WordPress site and all of its content unchanged."
+	echo "          Choose this when WordPress is already installed locally and its data is the data you want to use."
+	echo
+	echo "  clean - Erase the local working database and create a new WordPress site."
+	echo "          Choose this to start over locally. The old local databases are saved first, and exact typed confirmation is required."
+	echo
+	echo "  pull  - Replace the local database with a copy from a remote WordPress site."
+	echo "          Choose this to work with remote-site content locally. The command shows the source, asks for confirmation, and saves the old local databases first."
+	echo
+	while [[ -z "$DATABASE_CHOICE" ]]; do
+		printf 'Choose one option [keep/clean/pull]: '
+		IFS= read -r DATABASE_CHOICE
+		case "$DATABASE_CHOICE" in
+			keep|clean|pull) ;;
+			*)
+				echo "Please enter exactly 'keep', 'clean', or 'pull'."
+				echo
+				DATABASE_CHOICE=""
+				;;
+		esac
+	done
 fi
 
 case "$DATABASE_CHOICE" in
 	keep)
 		if ! ddev wp --path=/var/www/html core is-installed >/dev/null 2>&1; then
-			echo "ERROR: The working database does not contain an installed WordPress site. Choose clean or pull." >&2
+			echo "ERROR: 'keep' cannot be used because the local database does not contain an installed WordPress site." >&2
+			echo "Run setup again and choose 'clean' to create a new site or 'pull' to copy a remote site." >&2
 			exit 1
 		fi
-		echo "Complete: keeping the existing working database 'db'."
+		echo "Complete: the existing local WordPress database and its content were kept unchanged."
 		;;
 	clean)
-		if ddev wp --path=/var/www/html core is-installed >/dev/null 2>&1; then
-			echo "ERROR: Clean installation is only allowed when WordPress is not installed. Use the confirmed database tools rather than hiding a working-database deletion inside setup." >&2
-			exit 1
-		fi
 		if ((YES)); then
-			echo "ERROR: Clean installation needs interactive site and administrator values; it cannot be selected with --yes." >&2
+			echo "ERROR: A clean installation erases the local working database and needs an exact typed confirmation, a site address, and an administrator account. It cannot run without questions." >&2
 			exit 1
 		fi
-		printf 'Local site URL: '; IFS= read -r SITE_URL
-		printf 'Site title: '; IFS= read -r SITE_TITLE
-		printf 'Administrator login: '; IFS= read -r ADMIN_USER
-		printf 'Administrator email: '; IFS= read -r ADMIN_EMAIL
-		ddev wp --path=/var/www/html core install --url="$SITE_URL" --title="$SITE_TITLE" --admin_user="$ADMIN_USER" --admin_email="$ADMIN_EMAIL" --prompt=admin_password
+		echo "WARNING: This permanently erases every table and all content in the local working database named 'db'."
+		echo "The remote site and the separate PHP test database named 'anyape_wp_test_tools' are not changed."
+		echo "Before erasing db, setup saves a restorable copy of every local DDEV database."
+		echo
+		printf "Type 'erase local db' to continue: "
+		IFS= read -r CLEAN_CONFIRMATION
+		if [[ "$CLEAN_CONFIRMATION" != "erase local db" ]]; then
+			echo "Cancelled: the local database was not changed."
+			exit 1
+		fi
+		echo
+		echo "Enter the details for the new local WordPress site."
+		DDEV_DEFAULTS=()
+		while IFS= read -r -d '' value; do
+			DDEV_DEFAULTS+=("$value")
+		done < <(php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/ddev-project-defaults.php" "$PROJECT_ROOT/.ddev/config.yaml")
+		if ((${#DDEV_DEFAULTS[@]} != 4)); then
+			echo "ERROR: Could not prepare the suggested values from .ddev/config.yaml." >&2
+			exit 1
+		fi
+		DDEV_PROJECT_NAME="${DDEV_DEFAULTS[0]}"
+		DDEV_DEFAULT_SITE_URL="${DDEV_DEFAULTS[1]}"
+		DDEV_DEFAULT_SITE_TITLE="$DDEV_PROJECT_NAME"
+		DDEV_DEFAULT_ADMIN_USER="${DDEV_DEFAULTS[2]}"
+		DDEV_DEFAULT_ADMIN_EMAIL="${DDEV_DEFAULTS[3]}"
+		echo "The suggested values come from this DDEV project's configured name and address. Press Enter to accept each one, or type a different value."
+		echo "The administrator password is requested afterward and is not displayed while you type it."
+		echo
+		printf 'Local DDEV site address [%s]: ' "$DDEV_DEFAULT_SITE_URL"
+		IFS= read -r SITE_URL
+		SITE_URL="${SITE_URL:-$DDEV_DEFAULT_SITE_URL}"
+		printf 'Name shown for the site [%s]: ' "$DDEV_DEFAULT_SITE_TITLE"
+		IFS= read -r SITE_TITLE
+		SITE_TITLE="${SITE_TITLE:-$DDEV_DEFAULT_SITE_TITLE}"
+		printf 'Administrator login name [%s]: ' "$DDEV_DEFAULT_ADMIN_USER"
+		IFS= read -r ADMIN_USER
+		ADMIN_USER="${ADMIN_USER:-$DDEV_DEFAULT_ADMIN_USER}"
+		printf 'Administrator email address [%s]: ' "$DDEV_DEFAULT_ADMIN_EMAIL"
+		IFS= read -r ADMIN_EMAIL
+		ADMIN_EMAIL="${ADMIN_EMAIL:-$DDEV_DEFAULT_ADMIN_EMAIL}"
+		CLEAN_RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+		CLEAN_SNAPSHOT_NAME="before-clean-install-$CLEAN_RUN_ID"
+		echo
+		anyape_wp_test_tools_run_logged "Saving the current local databases as '$CLEAN_SNAPSHOT_NAME'..." ddev snapshot --name "$CLEAN_SNAPSHOT_NAME"
+		(
+			CLEAN_DATABASE_CHANGED=0
+			# This function is called by the EXIT trap below.
+			# shellcheck disable=SC2329
+			restore_failed_clean_install() {
+				local status=$?
+				trap - EXIT
+				if [[ -n "${ADMIN_PASSWORD_FILE:-}" ]]; then
+					rm -f "$ADMIN_PASSWORD_FILE"
+				fi
+				if ((status != 0 && CLEAN_DATABASE_CHANGED)); then
+					echo "The clean installation failed; restoring the saved local databases '$CLEAN_SNAPSHOT_NAME'..." >&2
+					if ! ddev snapshot restore "$CLEAN_SNAPSHOT_NAME"; then
+						echo "ERROR: Automatic restoration also failed. Restore manually with: composer restore -- $CLEAN_SNAPSHOT_NAME" >&2
+					fi
+				fi
+				exit "$status"
+			}
+			trap restore_failed_clean_install EXIT
+			while true; do
+				printf 'Administrator password (input hidden): '
+				IFS= read -r -s ADMIN_PASSWORD
+				echo
+				printf 'Repeat administrator password: '
+				IFS= read -r -s ADMIN_PASSWORD_CONFIRMATION
+				echo
+				if [[ -z "$ADMIN_PASSWORD" ]]; then
+					echo "The administrator password cannot be empty."
+					echo
+				elif [[ "$ADMIN_PASSWORD" != "$ADMIN_PASSWORD_CONFIRMATION" ]]; then
+					echo "The two passwords did not match. Try again."
+					echo
+				else
+					break
+				fi
+				done
+			umask 077
+			mkdir -p "$ANYAPE_WP_TEST_TOOLS_DIR/runtime"
+			ADMIN_PASSWORD_FILE="$(mktemp "$ANYAPE_WP_TEST_TOOLS_DIR/runtime/clean-admin-password.XXXXXX")"
+			printf '%s' "$ADMIN_PASSWORD" > "$ADMIN_PASSWORD_FILE"
+			CONTAINER_PASSWORD_FILE="/var/www/html/.anyape-wp-test-tools/runtime/$(basename "$ADMIN_PASSWORD_FILE")"
+			unset ADMIN_PASSWORD ADMIN_PASSWORD_CONFIRMATION
+			CLEAN_DATABASE_CHANGED=1
+			anyape_wp_test_tools_run_logged "Erasing and recreating the local working database..." ddev mysql -uroot -proot -e "DROP DATABASE IF EXISTS db; CREATE DATABASE db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON db.* TO 'db'@'%'; FLUSH PRIVILEGES;"
+			anyape_wp_test_tools_run_logged "Installing the new local WordPress site..." ddev exec --quiet --raw bash -c '
+				admin_password="$(< "$1")"
+				wp --path=/var/www/html core install \
+					--url="$2" \
+					--title="$3" \
+					--admin_user="$4" \
+					--admin_email="$5" \
+					--admin_password="$admin_password"
+			' wp-clean-install "$CONTAINER_PASSWORD_FILE" "$SITE_URL" "$SITE_TITLE" "$ADMIN_USER" "$ADMIN_EMAIL"
+			rm -f "$ADMIN_PASSWORD_FILE"
+			ADMIN_PASSWORD_FILE=""
+			CLEAN_DATABASE_CHANGED=0
+			trap - EXIT
+		)
+		echo "Complete: created a new local WordPress site. Previous local databases: '$CLEAN_SNAPSHOT_NAME'."
 		;;
 	pull)
-		if [[ ! -f "$TOOLKIT_DIR/db-refresh.local.php" ]]; then
-			echo "ERROR: Edit .test-tools/db-refresh.local.php before choosing the remote database refresh." >&2
+		if [[ ! -f "$ANYAPE_WP_TEST_TOOLS_DIR/db-refresh-local.php" ]]; then
+			echo "ERROR: The remote database settings file is missing: .anyape-wp-test-tools/db-refresh-local.php" >&2
+			echo "Copy .anyape-wp-test-tools/db-refresh-config-example.php to that name, read its instructions, and fill in its four values before choosing 'pull'." >&2
 			exit 1
 		fi
 		if ((YES)); then
-			bash "$TOOLKIT_DIR/database-host.sh" pull --yes
+			ANYAPE_WP_TEST_TOOLS_LOG_FILE="$ANYAPE_WP_TEST_TOOLS_LOG_FILE" ANYAPE_WP_TEST_TOOLS_VERBOSE="$VERBOSE" bash "$ANYAPE_WP_TEST_TOOLS_DIR/database-host.sh" pull --yes
 		else
-			bash "$TOOLKIT_DIR/database-host.sh" pull
+			ANYAPE_WP_TEST_TOOLS_LOG_FILE="$ANYAPE_WP_TEST_TOOLS_LOG_FILE" ANYAPE_WP_TEST_TOOLS_VERBOSE="$VERBOSE" bash "$ANYAPE_WP_TEST_TOOLS_DIR/database-host.sh" pull
 		fi
 		;;
 	*)
-		echo "ERROR: Database choice must be keep, clean, or pull." >&2
+		echo "ERROR: Database choice must be exactly 'keep', 'clean', or 'pull'." >&2
 		exit 1
 		;;
 esac
 
-ddev mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS wp_tests CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON wp_tests.* TO 'db'@'%'; FLUSH PRIVILEGES;"
-echo "Complete: test database 'wp_tests' exists and is available to the DDEV database user."
+print_step "Prepare and check the separate PHP test database"
 
-bash "$TOOLKIT_DIR/doctor-host.sh"
-bash "$TOOLKIT_DIR/run-tests-host.sh" --profile=harness
+echo "PHP tests use a separate local database named 'anyape_wp_test_tools'. They do not run against the working WordPress database named 'db'."
+echo "The setup will create anyape_wp_test_tools if it is missing, check the environment, and run Anyape WP Test Tools' own safety tests."
+echo
+anyape_wp_test_tools_run_logged "Creating the separate PHP test database if it is missing..." ddev mysql -uroot -proot -e "CREATE DATABASE IF NOT EXISTS anyape_wp_test_tools CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON anyape_wp_test_tools.* TO 'db'@'%'; FLUSH PRIVILEGES;"
 
+anyape_wp_test_tools_run_logged "Checking the local test environment..." bash "$ANYAPE_WP_TEST_TOOLS_DIR/doctor-host.sh"
+anyape_wp_test_tools_run_logged "Running Anyape WP Test Tools safety tests..." bash "$ANYAPE_WP_TEST_TOOLS_DIR/run-tests-host.sh" --profile=harness
+
+print_step "Optional complete project test run"
+
+echo "Anyape WP Test Tools' own safety tests have passed. You can now run the tests selected from this project's plugins and themes."
+echo "PHP tests rebuild only the separate anyape_wp_test_tools database. Browser tests temporarily use the local site; they first save its database, uploads, must-use plugins, and any extra configured files, then restore them afterward."
+echo "This can take several minutes. A real test failure will stop the test command and remain visible."
+echo
 if ((RUN_TESTS)); then
-	bash "$TOOLKIT_DIR/run-all-host.sh"
-elif ((!YES)) && confirm_change "Run all PHP and browser tests now?"; then
-	bash "$TOOLKIT_DIR/run-all-host.sh"
+	ANYAPE_WP_TEST_TOOLS_LOG_FILE="$ANYAPE_WP_TEST_TOOLS_LOG_FILE" ANYAPE_WP_TEST_TOOLS_VERBOSE="$VERBOSE" bash "$ANYAPE_WP_TEST_TOOLS_DIR/run-all-host.sh"
+elif ((!YES)) && confirm_change "Run the complete PHP and browser test set now?"; then
+	ANYAPE_WP_TEST_TOOLS_LOG_FILE="$ANYAPE_WP_TEST_TOOLS_LOG_FILE" ANYAPE_WP_TEST_TOOLS_VERBOSE="$VERBOSE" bash "$ANYAPE_WP_TEST_TOOLS_DIR/run-all-host.sh"
 else
 	echo "Skipped: full test run. Run 'composer test' when ready."
 fi

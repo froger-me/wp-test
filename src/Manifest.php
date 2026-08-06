@@ -2,12 +2,12 @@
 /**
  * Runtime test manifest value object.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-namespace WpTest;
+namespace AnyapeWPTestTools;
 
 use RuntimeException;
 

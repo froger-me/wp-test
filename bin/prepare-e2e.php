@@ -2,15 +2,15 @@
 /**
  * Create repeatable users and content for browser tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-$toolkit_root = dirname( __DIR__ );
-$project_root = dirname( $toolkit_root );
-$manifest     = getenv( 'WP_TEST_E2E_MANIFEST' );
-$users_file   = getenv( 'WP_TEST_E2E_USERS_FILE' );
+$anyape_wp_test_tools_root = dirname( __DIR__ );
+$project_root              = dirname( $anyape_wp_test_tools_root );
+$manifest                  = getenv( 'ANYAPE_WP_TEST_TOOLS_E2E_MANIFEST' );
+$users_file                = getenv( 'ANYAPE_WP_TEST_TOOLS_E2E_USERS_FILE' );
 
 if ( false === $manifest || ! is_file( $manifest ) || false === $users_file || '' === $users_file ) {
 	WP_CLI::error( 'Browser-test manifest or users-file environment value is missing.' );
@@ -43,15 +43,15 @@ if ( 'theme' === ( $data['profile'] ?? '' ) ) {
 
 $accounts = array(
 	'admin' => array(
-		'user_login' => 'wp_test_e2e_admin',
+		'user_login' => 'anyape_wp_test_tools_e2e_admin',
 		'user_pass'  => wp_generate_password( 32, true, true ),
-		'user_email' => 'wp-test-e2e-admin@example.invalid',
+		'user_email' => 'anyape-wp-test-tools-e2e-admin@example.invalid',
 		'role'       => 'administrator',
 	),
 	'lower' => array(
-		'user_login' => 'wp_test_e2e_editor',
+		'user_login' => 'anyape_wp_test_tools_e2e_editor',
 		'user_pass'  => wp_generate_password( 32, true, true ),
-		'user_email' => 'wp-test-e2e-editor@example.invalid',
+		'user_email' => 'anyape-wp-test-tools-e2e-editor@example.invalid',
 		'role'       => 'editor',
 	),
 );
@@ -71,7 +71,7 @@ unset( $account );
 
 $fixture_post_id = wp_insert_post(
 	array(
-		'post_title'   => 'WP Test E2E Fixture',
+		'post_title'   => 'Anyape WP Test Tools Browser Fixture',
 		'post_content' => 'Repeatable content created for the local browser test run.',
 		'post_status'  => 'publish',
 		'post_type'    => 'post',
@@ -82,17 +82,17 @@ if ( is_wp_error( $fixture_post_id ) ) {
 	WP_CLI::error( 'Could not create browser-test post: ' . $fixture_post_id->get_error_message() );
 }
 
-$fixture_term = wp_insert_term( 'WP Test E2E Term', 'category', array( 'slug' => 'wp-test-e2e-term' ) );
+$fixture_term = wp_insert_term( 'Anyape WP Test Tools Browser Term', 'category', array( 'slug' => 'anyape-wp-test-tools-e2e-term' ) );
 if ( is_wp_error( $fixture_term ) && 'term_exists' !== $fixture_term->get_error_code() ) {
 	WP_CLI::error( 'Could not create browser-test term: ' . $fixture_term->get_error_message() );
 }
 
 $attachment_id = wp_insert_attachment(
 	array(
-		'post_title'     => 'WP Test E2E Media',
+		'post_title'     => 'Anyape WP Test Tools Browser Media',
 		'post_status'    => 'inherit',
 		'post_mime_type' => 'text/plain',
-		'guid'           => home_url( '/wp-test-e2e-media.txt' ),
+		'guid'           => home_url( '/anyape-wp-test-tools-e2e-media.txt' ),
 	),
 	'',
 	(int) $fixture_post_id,
@@ -102,10 +102,10 @@ if ( is_wp_error( $attachment_id ) ) {
 	WP_CLI::error( 'Could not create browser-test attachment: ' . $attachment_id->get_error_message() );
 }
 
-update_option( 'wp_test_e2e_fixture', 'ready', false );
+update_option( 'anyape_wp_test_tools_e2e_fixture', 'ready', false );
 
 global $wpdb;
-$table = $wpdb->prefix . 'wp_test_e2e_fixture';
+$table = $wpdb->prefix . 'anyape_wp_test_tools_e2e_fixture';
 // phpcs:disable WordPress.DB.DirectDatabaseQuery -- This creates and fills a disposable table that the database snapshot removes.
 $wpdb->query( "CREATE TABLE IF NOT EXISTS `{$table}` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, fixture_key VARCHAR(191) NOT NULL, fixture_value LONGTEXT NOT NULL, PRIMARY KEY (id), UNIQUE KEY fixture_key (fixture_key)) {$wpdb->get_charset_collate()}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Disposable table restored from the database snapshot.
 $wpdb->replace(
@@ -129,7 +129,7 @@ foreach ( array_merge( $data['plugins'] ?? array(), $data['themes'] ?? array() )
 	}
 }
 
-$configuration_file = $project_root . '/.wp-test.php';
+$configuration_file = $project_root . '/.anyape-wp-test-tools.php';
 $configuration      = is_file( $configuration_file ) ? require $configuration_file : array();
 if ( is_array( $configuration ) && is_string( $configuration['e2e_bootstrap'] ?? null ) && '' !== trim( $configuration['e2e_bootstrap'] ) ) {
 	$bootstrap       = trim( $configuration['e2e_bootstrap'] );
@@ -146,7 +146,7 @@ foreach ( $fixture_files as $fixture_file ) {
 $payload = array(
 	'token' => wp_generate_password( 48, false, false ),
 );
-update_option( 'wp_test_e2e_auth_token_hash', hash( 'sha256', $payload['token'] ), false );
+update_option( 'anyape_wp_test_tools_e2e_auth_token_hash', hash( 'sha256', $payload['token'] ), false );
 if ( false === file_put_contents( $users_file, wp_json_encode( $payload, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR ) . PHP_EOL ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Runtime credentials are written outside the document root.
 	WP_CLI::error( 'Could not write browser-test user details.' );
 }

@@ -2,13 +2,13 @@
 /**
  * Active extension tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-use WpTest\IntegrationTestCase;
-use WpTest\Manifest;
+use AnyapeWPTestTools\IntegrationTestCase;
+use AnyapeWPTestTools\Manifest;
 
 /** Tests selected plugin and theme loading. */
 final class ActivePluginsTest extends IntegrationTestCase {
@@ -26,8 +26,17 @@ final class ActivePluginsTest extends IntegrationTestCase {
 				(string) realpath( $file ),
 			get_included_files()
 		);
+		$plugins        = $manifest->plugins();
+		if ( array() === $plugins ) {
+			$this->assertSame(
+				array(),
+				get_option( 'active_plugins', array() ),
+				'No plugins should be active when the test profile selects none.'
+			);
+			return;
+		}
 
-		foreach ( $manifest->plugins() as $plugin ) {
+		foreach ( $plugins as $plugin ) {
 			$plugin_file  = (string) $plugin['file'];
 			$runtime_file = WP_PLUGIN_DIR . '/' . $plugin_file;
 			$real_file    = realpath( $runtime_file );

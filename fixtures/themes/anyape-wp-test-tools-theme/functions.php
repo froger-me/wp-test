@@ -2,7 +2,7 @@
 /**
  * Theme fixture functions.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);

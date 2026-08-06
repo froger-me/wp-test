@@ -1,8 +1,8 @@
-# wp-test
+# Anyape WP Test Tools
 
-This toolkit runs WordPress plugin and theme tests in an existing DDEV project.
+Anyape WP Test Tools runs WordPress plugin and theme tests in an existing DDEV project.
 
-Put it in `.test-tools` inside the WordPress directory. It finds tests in the usual plugin and theme folders, so plugins and themes do not need code written specifically for this toolkit.
+Put it in `.anyape-wp-test-tools` inside the WordPress directory. It finds tests in the usual plugin and theme folders, so plugins and themes do not need code written specifically for Anyape WP Test Tools.
 
 The main command is:
 
@@ -18,7 +18,7 @@ For installation, start with [SETUP.md](SETUP.md).
 
 The README starts with the common path and gets more detailed as it goes:
 
-1. **Quick setup** gets the toolkit installed.
+1. **Quick setup** gets Anyape WP Test Tools installed.
 2. **What happens to the WordPress site?** explains the three places where work happens and what is protected.
 3. **Commands you will use** covers normal daily work.
 4. **Adding tests** shows the standard plugin and theme folders.
@@ -29,7 +29,7 @@ You do not need to understand the later sections before running `composer test`.
 
 ## Quick setup
 
-Install Docker, DDEV, Git, Composer, Node.js, and npm. Run the initial DDEV configuration in the WordPress directory, then clone the toolkit:
+Install Docker, DDEV, Git, Composer, Node.js, and npm. Run the initial DDEV configuration in the WordPress directory, then clone Anyape WP Test Tools:
 
 ```bash
 ddev config \
@@ -38,19 +38,19 @@ ddev config \
   --docroot=. \
   --webserver-type=apache-fpm
 
-git clone https://github.com/froger-me/wp-test.git .test-tools
+git clone https://github.com/anyape/anyape-wp-test-tools.git .anyape-wp-test-tools
 ```
 
 See what the guided setup would change:
 
 ```bash
-bash .test-tools/setup-host.sh --check
+bash .anyape-wp-test-tools/setup-host.sh --check
 ```
 
 When the report looks right, run it:
 
 ```bash
-bash .test-tools/setup-host.sh
+bash .anyape-wp-test-tools/setup-host.sh
 ```
 
 It can adapt a standard `wp-config.php`, install the required packages and browser, prepare the test database, add the root Composer commands, and run the first checks. It creates backups before editing and refuses files it cannot understand safely.
@@ -77,9 +77,9 @@ Browser tests do open this site. Because browser actions can change settings and
 
 ### The PHP test site
 
-PHP tests build a clean WordPress installation using database `wp_tests`. Test table names begin with `wptests_`.
+PHP tests build a clean WordPress installation using database `anyape_wp_test_tools`. Test table names begin with `anyape_wptt_`.
 
-Only the selected plugins and themes are made available to that clean installation. Test uploads and other generated files stay below `.test-tools/runtime/`.
+Only the selected plugins and themes are made available to that clean installation. Test uploads and other generated files stay below `.anyape-wp-test-tools/runtime/`.
 
 The test site is rebuilt on every run. Options, posts, users, roles, scheduled tasks, and plugin tables created there are disposable.
 
@@ -98,7 +98,7 @@ Other safety rules:
 
 ## Commands you will use
 
-All commands work from the WordPress root and from `.test-tools`.
+All commands work from the WordPress root and from `.anyape-wp-test-tools`.
 
 | Command | What it does |
 | --- | --- |
@@ -107,15 +107,16 @@ All commands work from the WordPress root and from `.test-tools`.
 | `composer test:e2e` | Runs only the browser tests. |
 | `composer test:plugin -- plugin-slug` | Runs the PHP tests for one plugin. |
 | `composer test:theme -- theme-slug` | Runs the PHP tests for one theme. |
-| `composer test:harness` | Tests the toolkit itself. |
+| `composer test:harness` | Tests Anyape WP Test Tools itself. |
 | `composer doctor` | Checks DDEV, database separation, packages, PHP, and WordPress compatibility without changing anything. |
 | `composer setup -- --check` | Reports unfinished setup work without changing anything. |
+| `composer anyape-wp-test-tools:uninstall` | Permanently removes Anyape WP Test Tools and the complete associated DDEV project after exact typed confirmation. |
 | `composer tail:log` | Follows the local WordPress debug log. |
 | `composer clear:log` | Empties the local WordPress debug log without deleting it. |
 | `composer db:pull` | Replaces the local working database from the configured remote WordPress site after confirmation. |
 | `composer snapshot -- name` | Saves all databases in the local DDEV project. |
 | `composer restore -- name` | Restores a named DDEV database snapshot after confirmation. |
-| `composer reset:tests` | Deletes and recreates only `wp_tests` after confirmation. |
+| `composer reset:tests` | Deletes and recreates only `anyape_wp_test_tools` after confirmation. |
 
 Less common commands:
 
@@ -132,7 +133,7 @@ composer format:wpcs
 
 `composer setup -- --check` reads the project and reports unfinished setup work. It does not edit files, install packages, start services, or change databases.
 
-`composer setup` is different: its purpose is to finish installation. It explains file changes, creates backups, can configure and start DDEV, installs packages, asks how to handle the working database, creates `wp_tests`, and runs the first checks. It is the only command in this toolkit that starts or configures DDEV.
+`composer setup` is different: its purpose is to finish installation. It explains file changes, creates backups, can configure and start DDEV, installs packages, asks how to handle the working database, creates `anyape_wp_test_tools`, and runs the first checks. It is the only command in Anyape WP Test Tools that starts or configures DDEV.
 
 For a known existing local WordPress database, a run without questions is:
 
@@ -143,43 +144,69 @@ composer setup -- --yes --database=keep
 The database choices are:
 
 - `--database=keep` verifies and keeps an installed WordPress site in `db`;
-- `--database=clean` installs WordPress only when `db` does not already contain a site; and
-- `--database=pull` runs the confirmed remote database refresh using `.test-tools/db-refresh.local.php`.
+- `--database=clean` saves the local databases, requires exact typed confirmation, erases `db`, and installs a new local WordPress site with suggested values based on `.ddev/config.yaml`; and
+- `--database=pull` runs the confirmed remote database refresh using `.anyape-wp-test-tools/db-refresh-local.php`.
 
 `--yes` never chooses one of these for you. It also does not decide deployment exclusions or create optional configuration files. Add `--run-tests` when the complete PHP and browser run should happen after setup.
+
+Guided setup, `composer test`, and `composer db:pull` keep detailed command output in `.anyape-wp-test-tools/runtime/logs/`. Normal output shows the current stage, whether it completed, and the log path. This keeps repeated plugin notices and long database tables out of the terminal while preserving them for review. Use `composer setup -- -v`, `composer test -- -v`, or `composer db:pull -- -v` to show the details while also saving them. A failed stage always prints the exact log path.
+
+### Complete uninstall
+
+Composer already uses the plain word `uninstall` for package removal, so the project command is named `anyape-wp-test-tools:uninstall`.
+
+If the Anyape WP Test Tools source folder is a Git working copy, uninstall stops before changing anything when that folder contains uncommitted changes. Commit or copy those changes first.
+
+Preview the complete removal without changing anything:
+
+```bash
+composer anyape-wp-test-tools:uninstall -- --dry-run
+```
+
+Run the uninstall from either the WordPress root or `.anyape-wp-test-tools`:
+
+```bash
+composer anyape-wp-test-tools:uninstall
+```
+
+The command first proves that `wp-config.php` has the exact arrangement that guided setup can reverse. It reconstructs direct remote database settings from the current file, restores normal disabled WordPress debugging, preserves a configured remote PHP error-log destination, and checks the resulting PHP before deleting anything. It does not need or read an old backup.
+
+The command then displays the complete removal list and requires the exact text `uninstall anyape wp test tools`. After confirmation it deletes the registered DDEV project without saving its databases, removes its containers, databases, snapshots, and `.ddev` files, removes Anyape WP Test Tools commands and upload exclusions, deletes generated settings and setup backups, and finally deletes `.anyape-wp-test-tools` itself. Unrelated Composer commands and unrelated upload exclusions remain.
+
+This removal cannot be undone by Anyape WP Test Tools. Export anything needed from DDEV before running it.
 
 `composer doctor` checks the finished environment without changing it. It verifies:
 
 - DDEV is already running;
 - WordPress uses working database `db` on database host `db`;
-- PHP tests use `wp_tests` and table names beginning with `wptests_`;
+- PHP tests use `anyape_wp_test_tools` and table names beginning with `anyape_wptt_`;
 - the working and PHP test databases are different;
 - DDEV can connect using the values generated in `wp-config-ddev.php`;
 - required host and container programs are available;
 - required PHP features are loaded;
 - generated directories are writable;
-- toolkit packages are installed; and
+- Anyape WP Test Tools packages are installed; and
 - the WordPress and DDEV PHP versions are a supported combination.
 
 ### PHP test commands
 
 `composer test:php` runs the normal PHP tests for active plugins and themes. It accepts PHPUnit options after `--`.
 
-`composer test:harness` tests the toolkit itself with small included plugins and themes. Use it after installation or a toolkit update.
+`composer test:harness` tests Anyape WP Test Tools itself with small included plugins and themes. Use it after installation or an Anyape WP Test Tools update.
 
-`composer test:plugin -- plugin-slug` and `composer test:theme -- theme-slug` limit the selected extension tests. Dependencies named in `.wp-test.php` are still loaded so the chosen extension can run normally.
+`composer test:plugin -- plugin-slug` and `composer test:theme -- theme-slug` limit the selected extension tests. Dependencies named in `.anyape-wp-test-tools.php` are still loaded so the chosen extension can run normally.
 
 `composer test:multisite` installs the clean PHP test site as WordPress multisite and activates selected plugins across the network.
 
 `composer test:destructive` includes tests marked `destructive`. Keep uninstall tests and tests that deliberately remove large amounts of test data in this group.
 
-`composer test:coverage` creates an HTML coverage report in `.test-tools/coverage/`. It requires Xdebug or PCOV to be enabled explicitly.
+`composer test:coverage` creates an HTML coverage report in `.anyape-wp-test-tools/coverage/`. It requires Xdebug or PCOV to be enabled explicitly.
 
-`composer test:junit` writes a machine-readable test report to `.test-tools/runtime/junit.xml`.
+`composer test:junit` writes a machine-readable test report to `.anyape-wp-test-tools/runtime/junit.xml`.
 
 ### Browser test commands
 
-`composer test:e2e` runs the toolkit browser checks plus browser tests belonging to selected plugins and themes. It accepts Playwright options after `--`.
+`composer test:e2e` runs Anyape WP Test Tools browser checks plus browser tests belonging to selected plugins and themes. It accepts Playwright options after `--`.
 
 Focused browser commands use the same plugin and theme selection rules as PHP tests:
 
@@ -255,7 +282,7 @@ test('an administrator can save the setting', async ({ page }) => {
 });
 ```
 
-That is enough. The plugin or theme does not need to register itself with `.test-tools`.
+That is enough. The plugin or theme does not need to register itself with `.anyape-wp-test-tools`.
 
 ### Optional PHP preparation
 
@@ -299,18 +326,18 @@ A missing test folder or optional preparation file is normal. A PHP syntax error
 
 ## How PHP tests work
 
-When `composer test:php` runs, the toolkit does the following:
+When `composer test:php` runs, Anyape WP Test Tools does the following:
 
 1. Checks DDEV, the two database names, installed programs, PHP features, writable paths, and WordPress compatibility.
-2. Reads the working site's active plugins, active theme, and parent theme without changing them.
-3. Applies any include, exclude, or dependency choices from `.wp-test.php`.
+2. Reads the working site's active plugins, active theme, and parent theme without changing them. If the database records a plugin as active but its file is missing, it reports and skips that plugin.
+3. Applies any include, exclude, or dependency choices from `.anyape-wp-test-tools.php`.
 4. Downloads or refreshes a clean copy of the same WordPress version and its official PHP test library.
-5. Creates a temporary `wp-content` below `.test-tools/runtime/` containing only the selected plugins and themes.
-6. Rebuilds WordPress in database `wp_tests` with table names beginning with `wptests_`.
+5. Creates a temporary `wp-content` below `.anyape-wp-test-tools/runtime/` containing only the selected plugins and themes.
+6. Rebuilds WordPress in database `anyape_wp_test_tools` with table names beginning with `anyape_wptt_`.
 7. Loads optional plugin and theme `tests/phpunit/bootstrap.php` files.
 8. Loads selected plugins in the same order used by the working site.
 9. Activates each plugin through WordPress's normal plugin activation function.
-10. Runs the toolkit safety tests and every discovered plugin and theme PHP test.
+10. Runs Anyape WP Test Tools safety tests and every discovered plugin and theme PHP test.
 
 The command enters the DDEV web container once. It does not repeatedly start a new container for each preparation step.
 
@@ -329,9 +356,9 @@ Activation output and failures name the responsible plugin. A repeated test run 
 
 For multisite tests, plugin activation is network-wide.
 
-### What the toolkit's own tests cover
+### What Anyape WP Test Tools' own tests cover
 
-Normal plugin and theme runs keep the toolkit's database and network safety checks. The larger set of included example-plugin checks runs only with:
+Normal plugin and theme runs keep Anyape WP Test Tools' database and network safety checks. The larger set of included example-plugin checks runs only with:
 
 ```bash
 composer test:harness
@@ -364,7 +391,7 @@ composer test:e2e -- --profile=theme my-theme
 Most sites need no extra configuration. When the defaults are not enough, copy the example:
 
 ```bash
-cp .test-tools/wp-test.config.example.php .wp-test.php
+cp .anyape-wp-test-tools/anyape-wp-test-tools-config-example.php .anyape-wp-test-tools.php
 ```
 
 That file can include or exclude installed plugins and themes, name dependencies for focused runs, add one site-wide preparation file, and list extra paths below `wp-content` that browser tests must restore.
@@ -393,12 +420,12 @@ Focused runs load the dependencies needed by the selected extension, but they ad
 
 1. Reads the running DDEV address and the WordPress site address.
 2. Stops if their host names differ, so it cannot accidentally open a remote site.
-3. Saves `wp-content/uploads`, `wp-content/mu-plugins`, and extra paths listed in `.wp-test.php`.
+3. Saves `wp-content/uploads`, `wp-content/mu-plugins`, and extra paths listed in `.anyape-wp-test-tools.php`.
 4. Exports the working database, records a comparison value, and creates a temporary DDEV database snapshot.
 5. Adds a temporary must-use plugin and creates an administrator, editor, post, category, media record, option, and small custom table entry.
 6. Loads plugin, theme, and site-wide `fixtures.php` preparation files.
 7. Creates signed-in browser state for the temporary users through a random value valid only for this run.
-8. Runs the toolkit checks and selected plugin and theme browser tests in Chromium.
+8. Runs Anyape WP Test Tools checks and selected plugin and theme browser tests in Chromium.
 9. Restores the DDEV database snapshot and saved files after success, failure, interruption, or another termination signal.
 10. Exports the restored database and compares it with the saved state. It also compares every protected file path.
 
@@ -408,19 +435,19 @@ After a successful restore, DDEV removes the temporary snapshot. If restoration 
 
 Browser tests use temporary administrator and editor accounts. They do not use a developer's account or the site's normal login form.
 
-The default browser state is the temporary administrator. Import the toolkit wrapper when a test needs the temporary editor or extra browser error details:
+The default browser state is the temporary administrator. Import Anyape WP Test Tools wrapper when a test needs the temporary editor or extra browser error details:
 
 ```ts
 import {
   test,
   expect,
   lowerCapabilityStorageState,
-} from '../../../../../.test-tools/e2e/test';
+} from '../../../../../.anyape-wp-test-tools/e2e/test';
 
 test.use({ storageState: lowerCapabilityStorageState });
 ```
 
-During the run, the temporary must-use plugin defines `WP_TEST_E2E`. Plugins should use that value to replace CAPTCHA checks, payments, file storage, webhooks, and update checks with local test behavior. Browser tests must not solve real CAPTCHAs or use real payment and storage accounts.
+During the run, the temporary must-use plugin defines `ANYAPE_WP_TEST_TOOLS_E2E`. Plugins should use that value to replace CAPTCHA checks, payments, file storage, webhooks, and update checks with local test behavior. Browser tests must not solve real CAPTCHAs or use real payment and storage accounts.
 
 WordPress email goes to DDEV's Mailpit. WordPress HTTP requests may reach only the local site, loopback addresses, and Mailpit unless a test provides a local replacement.
 
@@ -429,8 +456,8 @@ The temporary must-use plugin and all temporary database records are removed by 
 When a browser test fails, useful files are kept here:
 
 ```text
-.test-tools/test-results/
-.test-tools/playwright-report/
+.anyape-wp-test-tools/test-results/
+.anyape-wp-test-tools/playwright-report/
 ```
 
 They include screenshots, a recorded browser trace, browser messages, failed requests, the selected plugin or theme, the test title, and the last 200 lines written to the WordPress debug log during the run.
@@ -442,7 +469,7 @@ They include screenshots, a recorded browser trace, browser messages, failed req
 Copy and edit the ignored local example:
 
 ```bash
-cp .test-tools/db-refresh-config-example.php .test-tools/db-refresh.local.php
+cp .anyape-wp-test-tools/db-refresh-config-example.php .anyape-wp-test-tools/db-refresh-local.php
 composer db:pull
 ```
 
@@ -453,7 +480,7 @@ Before replacing `db`, the command downloads and verifies a compressed export an
 More precisely, the command:
 
 1. validates the ignored local configuration;
-2. checks that the configured local URL, WordPress address, and DDEV address use the same host name;
+2. checks that the configured local URL and DDEV address use the same host name;
 3. shows the remote SSH alias and path, local database, old URL, and new URL;
 4. requires confirmation;
 5. streams a compressed export over SSH with a one-gigabyte database packet limit;
@@ -463,7 +490,7 @@ More precisely, the command:
 9. replaces the URL in plain text and in WordPress values that store string lengths; and
 10. confirms that the final WordPress site address equals the configured local URL.
 
-The downloaded archive stays below `.test-tools/runtime/db-pulls/`, which is ignored by Git. The successful command prints the automatic snapshot name.
+The downloaded archive stays below `.anyape-wp-test-tools/runtime/db-pulls/`, which is ignored by Git. The successful command prints the automatic snapshot name.
 
 ### Save and restore local databases
 
@@ -472,7 +499,7 @@ composer snapshot -- before-plugin-update
 composer restore -- before-plugin-update
 ```
 
-A DDEV snapshot contains every database in the project, including `db` and `wp_tests`.
+A DDEV snapshot contains every database in the project, including `db` and `anyape_wp_test_tools`.
 
 Running `composer snapshot` without a name creates a dated name. Snapshot names accept letters, numbers, periods, underscores, and hyphens.
 
@@ -484,9 +511,9 @@ Restoration can recreate DDEV's database container. It requires typing the displ
 composer reset:tests
 ```
 
-This command can delete and recreate only `wp_tests`. It never targets `db`.
+This command can delete and recreate only `anyape_wp_test_tools`. It never targets `db`.
 
-It also restores the test database's permission for DDEV's normal database user. The command requires typing `reset wp_tests` unless `--yes` is deliberately supplied.
+It also restores the test database's permission for DDEV's normal database user. The command requires typing `reset anyape_wp_test_tools` unless `--yes` is deliberately supplied.
 
 ## WordPress logs
 
@@ -524,7 +551,7 @@ ddev logs -s db -f
 
 ## Test helpers
 
-Plugin and theme tests can extend `WpTest\IntegrationTestCase` when they need helpers for:
+Plugin and theme tests can extend `AnyapeWPTestTools\IntegrationTestCase` when they need helpers for:
 
 - options that are removed after each test;
 - database table and column checks;
@@ -551,7 +578,7 @@ The administrator helper creates a test administrator and selects it as the curr
 
 ### Plugin lifecycle helpers
 
-Activation, deactivation, and uninstall helpers use WordPress's normal functions. Before changing anything, they check that the current database is exactly `wp_tests` and the current table prefix is exactly `wptests_`.
+Activation, deactivation, and uninstall helpers use WordPress's normal functions. Before changing anything, they check that the current database is exactly `anyape_wp_test_tools` and the current table prefix is exactly `anyape_wptt_`.
 
 Uninstall is destructive even in a disposable test site, so uninstall tests belong in the `destructive` group:
 
@@ -566,10 +593,10 @@ public function test_uninstall_removes_plugin_data(): void {
 
 ### Expected HTTP replies
 
-Unexpected WordPress HTTP requests fail. Provide known replies with `WpTest\HttpMock`:
+Unexpected WordPress HTTP requests fail. Provide known replies with `AnyapeWPTestTools\HttpMock`:
 
 ```php
-use WpTest\HttpMock;
+use AnyapeWPTestTools\HttpMock;
 
 HttpMock::queue(
 	'https://service.example.test/api',
@@ -605,31 +632,31 @@ Browser tests use DDEV Mailpit instead because they run through the working site
 
 ## Reports and generated files
 
-The toolkit keeps downloaded packages, temporary WordPress copies, test state, and reports inside `.test-tools`.
+Anyape WP Test Tools keeps downloaded packages, temporary WordPress copies, test state, and reports inside `.anyape-wp-test-tools`.
 
 Important output paths:
 
 | Path | Contents |
 | --- | --- |
-| `.test-tools/runtime/` | Generated test selection, PHP test configuration, temporary uploads, database refresh downloads, and private setup backups. |
-| `.test-tools/test-results/` | Browser screenshots, traces, messages, failed requests, and debug-log excerpts. |
-| `.test-tools/playwright-report/` | Readable browser-test report. |
-| `.test-tools/coverage/` | HTML PHP coverage report. |
-| `.test-tools/runtime/junit.xml` | Machine-readable PHP test results. |
-| `.test-tools/wordpress/` | Clean WordPress files matching the installed site version. |
-| `.test-tools/wordpress-tests-lib/` | Official WordPress PHP test library matching that version. |
-| `.test-tools/vendor/` | Toolkit PHP packages. |
-| `.test-tools/node_modules/` | Toolkit Node.js and browser-test packages. |
+| `.anyape-wp-test-tools/runtime/` | Generated test selection, PHP test configuration, temporary uploads, database refresh downloads, and private setup backups. |
+| `.anyape-wp-test-tools/test-results/` | Browser screenshots, traces, messages, failed requests, and debug-log excerpts. |
+| `.anyape-wp-test-tools/playwright-report/` | Readable browser-test report. |
+| `.anyape-wp-test-tools/coverage/` | HTML PHP coverage report. |
+| `.anyape-wp-test-tools/runtime/junit.xml` | Machine-readable PHP test results. |
+| `.anyape-wp-test-tools/wordpress/` | Clean WordPress files matching the installed site version. |
+| `.anyape-wp-test-tools/wordpress-tests-lib/` | Official WordPress PHP test library matching that version. |
+| `.anyape-wp-test-tools/vendor/` | Anyape WP Test Tools PHP packages. |
+| `.anyape-wp-test-tools/node_modules/` | Anyape WP Test Tools Node.js and browser-test packages. |
 
-These paths are ignored by the toolkit repository. Successful browser tests remove their private working backup after database and file comparison. Failed restoration keeps its backup and prints the path.
+These paths are ignored by the Anyape WP Test Tools repository. Successful browser tests remove their private working backup after database and file comparison. Failed restoration keeps its backup and prints the path.
 
-The working site's `wp-content/debug.log` is not inside `.test-tools`; it belongs to the WordPress installation.
+The working site's `wp-content/debug.log` is not inside `.anyape-wp-test-tools`; it belongs to the WordPress installation.
 
 ## Safety rules in detail
 
 These rules are checked in code rather than being documentation promises alone:
 
-- PHP plugin lifecycle helpers refuse any database other than `wp_tests` or any table prefix other than `wptests_`.
+- PHP plugin lifecycle helpers refuse any database other than `anyape_wp_test_tools` or any table prefix other than `anyape_wptt_`.
 - The environment check refuses equal working and PHP test database names.
 - Browser tests compare the local DDEV and WordPress host names before opening Chromium.
 - Browser tests create a database snapshot before temporary users, posts, options, tables, or media are added.
@@ -639,44 +666,45 @@ These rules are checked in code rather than being documentation promises alone:
 - Remote database import, snapshot restoration, and test-database reset display their targets and require confirmation.
 - Setup writes through temporary files, checks PHP or JSON, creates dated backups, and restores `wp-config.php` after a failed check.
 - Setup reports structure without returning database values or other contents from `wp-config.php`.
-- SFTP configuration backups are stored with owner-only permissions below the ignored `.test-tools/runtime/setup-backups/` directory.
+- SFTP configuration backups are stored with owner-only permissions below the ignored `.anyape-wp-test-tools/runtime/setup-backups/` directory.
 
-Ordinary commands assume DDEV is already running. They do not call `ddev start`, `ddev stop`, `ddev restart`, or `ddev config`. Guided setup is the one explicit exception because preparing DDEV is its stated job.
+Ordinary commands assume DDEV is already running. They do not call `ddev start`, `ddev stop`, `ddev restart`, or `ddev config`. Guided setup and the explicitly destructive uninstall command are the two exceptions: setup prepares DDEV, while uninstall permanently deletes it after exact confirmation.
 
-## Toolkit files
+## Anyape WP Test Tools files
 
 The main files are arranged as follows:
 
 ```text
-.test-tools/
+.anyape-wp-test-tools/
 ├── bin/                         # small PHP commands for checking and preparing runs
-├── e2e/                         # browser setup, browser helpers, and toolkit browser checks
+├── e2e/                         # browser setup, browser helpers, and Anyape WP Test Tools browser checks
 ├── fixtures/                    # included example plugins, themes, and setup files
 ├── src/                         # reusable PHP test helpers and plugin lifecycle code
-├── tests/                       # toolkit PHP checks
+├── tests/                       # Anyape WP Test Tools PHP checks
 ├── composer.json               # PHP packages and public commands
 ├── package.json                # browser-test packages
 ├── config.php                  # fixed database values and compatibility rules
 ├── setup-host.sh               # guided installation
+├── uninstall-host.sh           # complete confirmed removal
 ├── doctor-host.sh              # read-only environment check
 ├── run-tests-host.sh           # PHP test command
 ├── run-e2e-host.sh             # browser test command and restoration
 ├── run-all-host.sh             # PHP tests followed by browser tests
 ├── database-host.sh            # refresh, snapshot, restore, and reset commands
 ├── log-host.sh                 # WordPress debug-log commands
-└── wp-test.config.example.php  # optional project selection example
+└── anyape-wp-test-tools-config-example.php  # optional project selection example
 ```
 
-The root `composer.json` mirrors the public command names. Both locations call the same files inside `.test-tools`, so command behavior does not depend on the current directory.
+The root `composer.json` mirrors the public command names. Both locations call the same files inside `.anyape-wp-test-tools`, so command behavior does not depend on the current directory.
 
 ## Requirements and updates
 
-The toolkit requires PHP 8.0 or later and currently uses PHPUnit 9.6. `composer doctor` checks the installed WordPress version against the DDEV PHP version and refuses combinations the toolkit does not cover.
+Anyape WP Test Tools requires PHP 8.0 or later and currently uses PHPUnit 9.6. `composer doctor` checks the installed WordPress version against the DDEV PHP version and refuses combinations Anyape WP Test Tools does not cover.
 
-Update the toolkit from the WordPress root:
+Update Anyape WP Test Tools from the WordPress root:
 
 ```bash
-git -C .test-tools pull --ff-only
+git -C .anyape-wp-test-tools pull --ff-only
 composer setup -- --yes --database=keep
 composer test
 ```
@@ -714,9 +742,9 @@ composer setup -- --check
 
 ### A root Composer command has the same name
 
-Setup keeps unrelated root packages, settings, and commands. It refuses only when an existing command uses one of the toolkit's public names for different work. Rename the existing command or decide explicitly which behavior the project needs.
+Setup keeps unrelated root packages, settings, and commands. It refuses only when an existing command uses one of Anyape WP Test Tools' public names for different work. Rename the existing command or decide explicitly which behavior the project needs.
 
-### `wp_tests` is missing or damaged
+### `anyape_wp_test_tools` is missing or damaged
 
 Run:
 
@@ -760,4 +788,4 @@ ddev utility mutagen-diagnose
 
 Reset synchronization only when those results call for it. See [SETUP.md](SETUP.md) for the full troubleshooting steps.
 
-For full installation details and problems, see [SETUP.md](SETUP.md). Repository maintenance rules are in [AGENTS.md](AGENTS.md). Remaining ideas are recorded in [PLAN.md](PLAN.md).
+For full installation details and problems, see [SETUP.md](SETUP.md). Repository maintenance rules are in [AGENTS.md](AGENTS.md).

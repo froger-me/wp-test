@@ -2,12 +2,12 @@
 /**
  * Shared base class for WordPress integration tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-namespace WpTest;
+namespace AnyapeWPTestTools;
 
 use WP_REST_Request;
 use WP_REST_Response;

@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$TOOLKIT_DIR")"
+ANYAPE_WP_TEST_TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$ANYAPE_WP_TEST_TOOLS_DIR")"
 ACTION="${1:-}"
 
 if (($# > 0)); then
@@ -22,14 +22,29 @@ fi
 cd "$PROJECT_ROOT"
 
 YES=0
+VERBOSE="${ANYAPE_WP_TEST_TOOLS_VERBOSE:-0}"
 ARGS=()
 for argument in "$@"; do
-	if [[ "$argument" == "--yes" ]]; then
-		YES=1
-	else
-		ARGS+=("$argument")
-	fi
+	case "$argument" in
+		--yes) YES=1 ;;
+		-v|--verbose) VERBOSE=1 ;;
+		*) ARGS+=("$argument") ;;
+	esac
 done
+
+# The path is resolved from this script's directory.
+# shellcheck disable=SC1091
+source "$ANYAPE_WP_TEST_TOOLS_DIR/logging-host.sh"
+export ANYAPE_WP_TEST_TOOLS_VERBOSE="$VERBOSE"
+anyape_wp_test_tools_log_initialize "$ANYAPE_WP_TEST_TOOLS_DIR" "database-$ACTION"
+if [[ "$ANYAPE_WP_TEST_TOOLS_LOG_OWNER" == "1" ]]; then
+	if ((VERBOSE)); then
+		echo "Detailed command output will be shown and saved to: $ANYAPE_WP_TEST_TOOLS_LOG_FILE"
+	else
+		echo "Detailed command output will be saved to: $ANYAPE_WP_TEST_TOOLS_LOG_FILE"
+		echo "Run this command with -v or --verbose to show those details while it runs."
+	fi
+fi
 
 confirm() {
 	local expected="$1"
@@ -67,8 +82,7 @@ case "$ACTION" in
 		fi
 		SNAPSHOT_NAME="${ARGS[0]:-local-$(date -u +%Y%m%dT%H%M%SZ)}"
 		validate_snapshot_name "$SNAPSHOT_NAME"
-		echo "Creating local DDEV database snapshot '$SNAPSHOT_NAME'..."
-		ddev snapshot --name "$SNAPSHOT_NAME"
+		anyape_wp_test_tools_run_logged "Creating local database snapshot '$SNAPSHOT_NAME'..." ddev snapshot --name "$SNAPSHOT_NAME"
 		echo "Created snapshot '$SNAPSHOT_NAME'. Restore it with: composer restore -- $SNAPSHOT_NAME"
 		;;
 	restore)
@@ -79,16 +93,16 @@ case "$ACTION" in
 		SNAPSHOT_NAME="${ARGS[0]}"
 		validate_snapshot_name "$SNAPSHOT_NAME"
 		confirm "restore $SNAPSHOT_NAME" "This replaces every database in the local DDEV project with snapshot '$SNAPSHOT_NAME'."
-		ddev snapshot restore "$SNAPSHOT_NAME"
+		anyape_wp_test_tools_run_logged "Restoring local database snapshot '$SNAPSHOT_NAME'..." ddev snapshot restore "$SNAPSHOT_NAME"
 		;;
 	reset-tests)
 		if ((${#ARGS[@]} != 0)); then
 			echo "ERROR: composer reset:tests accepts only the optional --yes flag." >&2
 			exit 1
 		fi
-		confirm "reset wp_tests" "This permanently deletes and recreates only the local PHPUnit database 'wp_tests'. The working WordPress database 'db' is not changed."
-		ddev mysql -uroot -proot -e "DROP DATABASE IF EXISTS wp_tests; CREATE DATABASE wp_tests CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON wp_tests.* TO 'db'@'%'; FLUSH PRIVILEGES;"
-		echo "Recreated the local PHPUnit database 'wp_tests'."
+		confirm "reset anyape_wp_test_tools" "This permanently deletes and recreates only the local PHPUnit database 'anyape_wp_test_tools'. The working WordPress database 'db' is not changed."
+		anyape_wp_test_tools_run_logged "Recreating the separate PHP test database..." ddev mysql -uroot -proot -e "DROP DATABASE IF EXISTS anyape_wp_test_tools; CREATE DATABASE anyape_wp_test_tools CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON anyape_wp_test_tools.* TO 'db'@'%'; FLUSH PRIVILEGES;"
+		echo "Recreated the local PHPUnit database 'anyape_wp_test_tools'."
 		;;
 	pull)
 		if ((${#ARGS[@]} != 0)); then
@@ -102,8 +116,8 @@ case "$ACTION" in
 			fi
 		done
 
-		CONFIG_OUTPUT="$(mktemp "${TMPDIR:-/tmp}/wp-test-db-refresh.XXXXXX")"
-		if ! php "$TOOLKIT_DIR/bin/database-refresh-config.php" "$TOOLKIT_DIR/db-refresh.local.php" > "$CONFIG_OUTPUT"; then
+		CONFIG_OUTPUT="$(mktemp "${TMPDIR:-/tmp}/anyape-wp-test-tools-db-refresh.XXXXXX")"
+		if ! php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/database-refresh-config.php" "$ANYAPE_WP_TEST_TOOLS_DIR/db-refresh-local.php" > "$CONFIG_OUTPUT"; then
 			rm -f "$CONFIG_OUTPUT"
 			exit 1
 		fi
@@ -122,23 +136,21 @@ case "$ACTION" in
 		LOCAL_URL="${CONFIG_VALUES[3]%/}"
 		REMOTE_PATH_SHELL="${CONFIG_VALUES[4]}"
 
-		DDEV_URL="$(ddev describe --json-output | php "$TOOLKIT_DIR/bin/e2e-ddev-url.php")"
-		SITE_URL="$(ddev wp --path=/var/www/html option get siteurl --skip-plugins --skip-themes)"
+		DDEV_URL="$(ddev describe --json-output | php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/e2e-ddev-url.php")"
 		URL_CHECK="$(php -r '
 			$ddev = parse_url($argv[1], PHP_URL_HOST);
-			$site = parse_url($argv[2], PHP_URL_HOST);
-			$local = parse_url($argv[3], PHP_URL_HOST);
-			exit(is_string($ddev) && $ddev !== "" && $ddev === $site && $site === $local ? 0 : 1);
-		' "$DDEV_URL" "$SITE_URL" "$LOCAL_URL" && printf valid || printf invalid)"
+			$local = parse_url($argv[2], PHP_URL_HOST);
+			exit(is_string($ddev) && $ddev !== "" && $ddev === $local ? 0 : 1);
+		' "$DDEV_URL" "$LOCAL_URL" && printf valid || printf invalid)"
 		if [[ "$URL_CHECK" != "valid" ]]; then
-			echo "ERROR: Configured local_url '$LOCAL_URL', WordPress site URL '$SITE_URL', and DDEV URL '$DDEV_URL' must use the same host name." >&2
+			echo "ERROR: Configured local_url '$LOCAL_URL' and DDEV URL '$DDEV_URL' must use the same host name." >&2
 			exit 1
 		fi
 
-		confirm "pull $SSH_ALIAS" "This downloads the WordPress database from '$SSH_ALIAS:$REMOTE_PATH', replaces the local working database 'db', and changes '$REMOTE_URL' to '$LOCAL_URL'. A local snapshot is created first."
+		confirm "pull $SSH_ALIAS" "This reads the WordPress database at '$SSH_ALIAS:$REMOTE_PATH' without changing the remote site. It saves a copy of every local DDEV database, replaces only the local working database named 'db', and changes '$REMOTE_URL' to '$LOCAL_URL'."
 
 		RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
-		RUN_DIR="$TOOLKIT_DIR/runtime/db-pulls/$RUN_ID"
+		RUN_DIR="$ANYAPE_WP_TEST_TOOLS_DIR/runtime/db-pulls/$RUN_ID"
 		ARCHIVE="$RUN_DIR/remote.sql.gz"
 		SNAPSHOT_NAME="before-db-pull-$RUN_ID"
 		umask 077
@@ -155,8 +167,7 @@ case "$ACTION" in
 		gzip -t "$ARCHIVE"
 		echo "Verified compressed database archive '$ARCHIVE'."
 
-		echo "Creating automatic local snapshot '$SNAPSHOT_NAME'..."
-		ddev snapshot --name "$SNAPSHOT_NAME"
+		anyape_wp_test_tools_run_logged "Saving the current local databases as '$SNAPSHOT_NAME'..." ddev snapshot --name "$SNAPSHOT_NAME"
 		PULL_CHANGED=0
 		restore_failed_pull() {
 			local status=$?
@@ -171,8 +182,8 @@ case "$ACTION" in
 		}
 		trap restore_failed_pull EXIT
 		PULL_CHANGED=1
-		ddev import-db --database=db --file="$ARCHIVE"
-		ddev wp --path=/var/www/html search-replace "$REMOTE_URL" "$LOCAL_URL" --all-tables --skip-columns=guid --precise
+		anyape_wp_test_tools_run_logged "Importing the remote copy into local database 'db'..." ddev import-db --database=db --file="$ARCHIVE"
+		anyape_wp_test_tools_run_logged "Replacing the remote site address with the local address..." ddev wp --path=/var/www/html search-replace "$REMOTE_URL" "$LOCAL_URL" --all-tables --skip-columns=guid --precise
 		UPDATED_SITE_URL="$(ddev wp --path=/var/www/html option get siteurl --skip-plugins --skip-themes)"
 		if [[ "${UPDATED_SITE_URL%/}" != "$LOCAL_URL" ]]; then
 			echo "ERROR: Imported WordPress site URL '$UPDATED_SITE_URL' does not equal configured local_url '$LOCAL_URL'." >&2
@@ -187,3 +198,5 @@ case "$ACTION" in
 		exit 1
 		;;
 esac
+
+anyape_wp_test_tools_report_log

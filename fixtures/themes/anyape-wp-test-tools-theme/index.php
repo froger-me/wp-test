@@ -2,7 +2,7 @@
 /**
  * Theme fixture fallback template.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);

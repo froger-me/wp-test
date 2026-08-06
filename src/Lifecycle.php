@@ -2,12 +2,12 @@
 /**
  * Plugin lifecycle helpers for integration tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-namespace WpTest;
+namespace AnyapeWPTestTools;
 
 use RuntimeException;
 use WP_Error;
@@ -79,11 +79,11 @@ final class Lifecycle {
 	 */
 	public static function assert_safe_database(): void {
 		global $wpdb;
-		if ( ! defined( 'DB_NAME' ) || 'wp_tests' !== DB_NAME ) {
-			throw new RuntimeException( sprintf( 'Lifecycle operation refused: expected DB_NAME wp_tests, got %s.', defined( 'DB_NAME' ) ? DB_NAME : '(undefined)' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserve the exact database name.
+		if ( ! defined( 'DB_NAME' ) || 'anyape_wp_test_tools' !== DB_NAME ) {
+			throw new RuntimeException( sprintf( 'Lifecycle operation refused: expected DB_NAME anyape_wp_test_tools, got %s.', defined( 'DB_NAME' ) ? DB_NAME : '(undefined)' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserve the exact database name.
 		}
-		if ( ! isset( $wpdb ) || 'wptests_' !== $wpdb->prefix ) {
-			throw new RuntimeException( sprintf( 'Lifecycle operation refused: expected table prefix wptests_, got %s.', isset( $wpdb ) ? $wpdb->prefix : '(unavailable)' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserve the exact table prefix.
+		if ( ! isset( $wpdb ) || 'anyape_wptt_' !== $wpdb->prefix ) {
+			throw new RuntimeException( sprintf( 'Lifecycle operation refused: expected table prefix anyape_wptt_, got %s.', isset( $wpdb ) ? $wpdb->prefix : '(unavailable)' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Preserve the exact table prefix.
 		}
 	}
 

@@ -2,13 +2,13 @@
 /**
  * External HTTP isolation tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-use WpTest\HttpMock;
-use WpTest\IntegrationTestCase;
+use AnyapeWPTestTools\HttpMock;
+use AnyapeWPTestTools\IntegrationTestCase;
 
 /** Tests blocked and mocked WordPress HTTP requests. */
 final class ExternalHttpIsolationTest extends IntegrationTestCase {

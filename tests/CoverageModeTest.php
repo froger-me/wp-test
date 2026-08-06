@@ -2,7 +2,7 @@
 /**
  * Coverage driver tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
@@ -16,7 +16,7 @@ final class CoverageModeTest extends WP_UnitTestCase {
 	 * @group coverage
 	 */
 	public function test_requested_coverage_driver_is_active(): void {
-		if ( '1' !== getenv( 'WP_TEST_COVERAGE' ) ) {
+		if ( '1' !== getenv( 'ANYAPE_WP_TEST_TOOLS_COVERAGE' ) ) {
 			$this->fail( 'The coverage self-check ran without coverage being requested.' );
 		}
 

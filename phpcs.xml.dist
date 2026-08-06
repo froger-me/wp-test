@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
-<ruleset name="wp-test">
-	<description>WordPress Coding Standards for the wp-test toolkit.</description>
+<ruleset name="anyape-wp-test-tools">
+	<description>WordPress Coding Standards for Anyape WP Test Tools.</description>
 
 	<arg name="extensions" value="php"/>
 	<arg name="parallel" value="8"/>
@@ -17,6 +17,6 @@
 		<exclude-pattern>/src/*.php</exclude-pattern>
 		<exclude-pattern>/*/tests/phpunit/*Test\.php</exclude-pattern>
 		<exclude-pattern>/tests/*Test\.php</exclude-pattern>
-		<exclude-pattern>/wp-test.config.example.php</exclude-pattern>
+		<exclude-pattern>/anyape-wp-test-tools-config-example.php</exclude-pattern>
 	</rule>
 </ruleset>

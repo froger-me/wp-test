@@ -2,7 +2,7 @@
 /**
  * Safely adapt a standard wp-config.php for local DDEV use.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
@@ -20,12 +20,12 @@ require_once __DIR__ . '/inspect-setup.php';
  * @return array<string, mixed>
  * @throws RuntimeException When the file cannot be safely recognized, validated, backed up, or written.
  */
-function wp_test_update_wp_config( string $path, bool $check_only = false ): array {
+function anyape_wp_test_tools_update_wp_config( string $path, bool $check_only = false ): array {
 	if ( ! is_file( $path ) ) {
 		throw new RuntimeException( 'wp-config.php does not exist: ' . $path );
 	}
 	$original   = (string) file_get_contents( $path );
-	$inspection = wp_test_inspect_wp_config( $original );
+	$inspection = anyape_wp_test_tools_inspect_wp_config( $original );
 	if ( 'ready' === $inspection['status'] ) {
 		return array(
 			'changed' => false,
@@ -38,8 +38,8 @@ function wp_test_update_wp_config( string $path, bool $check_only = false ): arr
 	}
 
 	$updated = ! empty( $inspection['has_ddev_flag'] )
-		? wp_test_complete_ddev_wp_config( $original )
-		: wp_test_build_wp_config( $original );
+		? anyape_wp_test_tools_complete_ddev_wp_config( $original )
+		: anyape_wp_test_tools_build_wp_config( $original );
 	if ( $updated === $original ) {
 		return array(
 			'changed' => false,
@@ -56,16 +56,16 @@ function wp_test_update_wp_config( string $path, bool $check_only = false ): arr
 	}
 
 	$directory = dirname( $path );
-	$backup    = $path . '.before-test-tools-' . gmdate( 'Ymd\THis\Z' );
+	$backup    = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' );
 	$suffix    = 1;
 	while ( file_exists( $backup ) ) {
-		$backup = $path . '.before-test-tools-' . gmdate( 'Ymd\THis\Z' ) . '-' . $suffix;
+		$backup = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' ) . '-' . $suffix;
 		++$suffix;
 	}
 	if ( ! copy( $path, $backup ) ) {
 		throw new RuntimeException( 'Could not create wp-config.php backup: ' . $backup );
 	}
-	$temp = tempnam( $directory, '.wp-config-test-tools-' );
+	$temp = tempnam( $directory, '.wp-config-anyape-wp-test-tools-' );
 	if ( false === $temp ) {
 		throw new RuntimeException( 'Could not create a temporary file beside wp-config.php.' );
 	}
@@ -77,13 +77,13 @@ function wp_test_update_wp_config( string $path, bool $check_only = false ): arr
 		if ( false !== $permissions ) {
 			chmod( $temp, $permissions & 0777 );
 		}
-		wp_test_assert_php_syntax( $temp );
+		anyape_wp_test_tools_assert_php_syntax( $temp );
 		if ( ! rename( $temp, $path ) ) {
 			throw new RuntimeException( 'Could not replace wp-config.php with the validated file.' );
 		}
 		$temp = '';
-		wp_test_assert_php_syntax( $path );
-		$final = wp_test_inspect_wp_config( (string) file_get_contents( $path ) );
+		anyape_wp_test_tools_assert_php_syntax( $path );
+		$final = anyape_wp_test_tools_inspect_wp_config( (string) file_get_contents( $path ) );
 		if ( 'ready' !== $final['status'] ) {
 			throw new RuntimeException( 'The updated wp-config.php did not pass the DDEV structure check.' );
 		}
@@ -109,7 +109,7 @@ function wp_test_update_wp_config( string $path, bool $check_only = false ): arr
  * @return string
  * @throws RuntimeException When a safe insertion point cannot be found.
  */
-function wp_test_complete_ddev_wp_config( string $contents ): string {
+function anyape_wp_test_tools_complete_ddev_wp_config( string $contents ): string {
 	$settings = array(
 		'WP_DEBUG'         => "defined( 'WP_DEBUG' ) || define( 'WP_DEBUG', true );",
 		'WP_DEBUG_LOG'     => "defined( 'WP_DEBUG_LOG' ) || define( 'WP_DEBUG_LOG', \$is_ddev );",
@@ -138,7 +138,7 @@ function wp_test_complete_ddev_wp_config( string $contents ): string {
  * @return string
  * @throws RuntimeException When the standard configuration cannot be transformed safely.
  */
-function wp_test_build_wp_config( string $contents ): string {
+function anyape_wp_test_tools_build_wp_config( string $contents ): string {
 	$markers = array( 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'DB_HOST' );
 	$matches = array();
 	foreach ( $markers as $marker ) {
@@ -199,7 +199,7 @@ function wp_test_build_wp_config( string $contents ): string {
  * @param string $path PHP file path.
  * @throws RuntimeException When PHP reports invalid syntax.
  */
-function wp_test_assert_php_syntax( string $path ): void {
+function anyape_wp_test_tools_assert_php_syntax( string $path ): void {
 	$command = escapeshellarg( PHP_BINARY ) . ' -l ' . escapeshellarg( $path ) . ' 2>&1';
 	exec( $command, $output, $status );
 	if ( 0 !== $status ) {
@@ -219,7 +219,7 @@ if ( realpath( (string) ( $argv[0] ?? '' ) ) === __FILE__ ) {
 		exit( 1 );
 	}
 	try {
-		echo json_encode( wp_test_update_wp_config( $arguments[0], $check_only ), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ), PHP_EOL;
+		echo json_encode( anyape_wp_test_tools_update_wp_config( $arguments[0], $check_only ), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ), PHP_EOL;
 	} catch ( Throwable $error ) {
 		fwrite( STDERR, 'ERROR: ' . $error->getMessage() . PHP_EOL );
 		exit( 1 );

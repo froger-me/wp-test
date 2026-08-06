@@ -2,7 +2,7 @@
 /**
  * Add approved local paths to Git and SFTP ignore files.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
@@ -19,14 +19,14 @@ declare(strict_types=1);
  * @return array<string, mixed>
  * @throws RuntimeException When the file type or contents are unsupported.
  */
-function wp_test_update_ignore_file( string $project_root, string $type, bool $check_only = false ): array {
+function anyape_wp_test_tools_update_ignore_file( string $project_root, string $type, bool $check_only = false ): array {
 	$project_root = rtrim( $project_root, DIRECTORY_SEPARATOR );
 	if ( 'git' === $type ) {
 		$path    = $project_root . '/.gitignore';
-		$entries = array( '.wp-test.php', 'wp-config-ddev.php', 'wp-config.php.before-ddev', 'wp-config.php.before-test-tools-*', 'composer.json.before-test-tools-*', '.gitignore.before-test-tools-*' );
+		$entries = array( '.anyape-wp-test-tools.php', 'wp-config-ddev.php', 'wp-config.php.before-ddev', 'wp-config.php.before-anyape-wp-test-tools-*', 'composer.json.before-anyape-wp-test-tools-*', '.gitignore.before-anyape-wp-test-tools-*' );
 		$modules = $project_root . '/.gitmodules';
-		if ( ! is_file( $modules ) || ! str_contains( (string) file_get_contents( $modules ), '.test-tools' ) ) {
-			array_unshift( $entries, '.test-tools/' );
+		if ( ! is_file( $modules ) || ! str_contains( (string) file_get_contents( $modules ), '.anyape-wp-test-tools' ) ) {
+			array_unshift( $entries, '.anyape-wp-test-tools/' );
 		}
 		$original = is_file( $path ) ? (string) file_get_contents( $path ) : '';
 		$lines    = preg_split( '/\R/', rtrim( $original, "\r\n" ) );
@@ -47,7 +47,7 @@ function wp_test_update_ignore_file( string $project_root, string $type, bool $c
 		if ( ! is_array( $data ) || ! isset( $data['ignore'] ) || ! is_array( $data['ignore'] ) ) {
 			throw new RuntimeException( 'SFTP configuration must be a JSON object with an ignore array.' );
 		}
-		$entries = array( '.vscode', '.ddev', '.test-tools', '.wp-test.php', 'wp-config-ddev.php', 'wp-config.php.before-ddev', 'wp-config.php.before-test-tools-*', 'composer.json', 'composer.lock', 'composer.json.before-test-tools-*' );
+		$entries = array( '.vscode', '.ddev', '.anyape-wp-test-tools', '.anyape-wp-test-tools.php', 'wp-config-ddev.php', 'wp-config.php.before-ddev', 'wp-config.php.before-anyape-wp-test-tools-*', 'composer.json', 'composer.lock', 'composer.json.before-anyape-wp-test-tools-*' );
 		foreach ( $entries as $entry ) {
 			if ( ! in_array( $entry, $data['ignore'], true ) ) {
 				$data['ignore'][] = $entry;
@@ -75,23 +75,23 @@ function wp_test_update_ignore_file( string $project_root, string $type, bool $c
 	$backup = null;
 	if ( is_file( $path ) ) {
 		if ( 'sftp' === $type ) {
-			$backup_directory = $project_root . '/.test-tools/runtime/setup-backups';
+			$backup_directory = $project_root . '/.anyape-wp-test-tools/runtime/setup-backups';
 			if ( ! is_dir( $backup_directory ) && ! mkdir( $backup_directory, 0700, true ) ) {
 				throw new RuntimeException( 'Could not create the private setup backup directory.' );
 			}
-			$backup = wp_test_ignore_backup_name( $backup_directory . '/sftp.json' );
+			$backup = anyape_wp_test_tools_ignore_backup_name( $backup_directory . '/sftp.json' );
 			if ( false === file_put_contents( $backup, $original ) ) {
 				throw new RuntimeException( 'Could not create the private SFTP configuration backup.' );
 			}
 			chmod( $backup, 0600 );
 		} else {
-			$backup = wp_test_ignore_backup_name( $path );
+			$backup = anyape_wp_test_tools_ignore_backup_name( $path );
 			if ( ! copy( $path, $backup ) ) {
 				throw new RuntimeException( 'Could not back up ignore file: ' . $path );
 			}
 		}
 	}
-	wp_test_ignore_atomic_write( $path, $updated );
+	anyape_wp_test_tools_ignore_atomic_write( $path, $updated );
 	return array(
 		'changed' => true,
 		'backup'  => $backup,
@@ -106,12 +106,12 @@ function wp_test_update_ignore_file( string $project_root, string $type, bool $c
  * @param string $contents Complete file contents.
  * @throws RuntimeException When the destination cannot be written atomically.
  */
-function wp_test_ignore_atomic_write( string $path, string $contents ): void {
+function anyape_wp_test_tools_ignore_atomic_write( string $path, string $contents ): void {
 	$directory = dirname( $path );
 	if ( ! is_dir( $directory ) || ! is_writable( $directory ) ) {
 		throw new RuntimeException( 'Ignore-file directory is not writable: ' . $directory );
 	}
-	$temp = tempnam( $directory, '.ignore-test-tools-' );
+	$temp = tempnam( $directory, '.ignore-anyape-wp-test-tools-' );
 	if ( false === $temp || false === file_put_contents( $temp, $contents ) || ! rename( $temp, $path ) ) {
 		if ( is_string( $temp ) && file_exists( $temp ) ) {
 			unlink( $temp );
@@ -126,8 +126,8 @@ function wp_test_ignore_atomic_write( string $path, string $contents ): void {
  * @param string $path File being backed up.
  * @return string
  */
-function wp_test_ignore_backup_name( string $path ): string {
-	$base   = $path . '.before-test-tools-' . gmdate( 'Ymd\THis\Z' );
+function anyape_wp_test_tools_ignore_backup_name( string $path ): string {
+	$base   = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' );
 	$backup = $base;
 	$suffix = 1;
 	while ( file_exists( $backup ) ) {
@@ -146,7 +146,7 @@ if ( realpath( (string) ( $argv[0] ?? '' ) ) === __FILE__ ) {
 		exit( 1 );
 	}
 	try {
-		echo json_encode( wp_test_update_ignore_file( $arguments[0], $arguments[1], $check_only ), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ), PHP_EOL;
+		echo json_encode( anyape_wp_test_tools_update_ignore_file( $arguments[0], $arguments[1], $check_only ), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ), PHP_EOL;
 	} catch ( Throwable $error ) {
 		fwrite( STDERR, 'ERROR: ' . $error->getMessage() . PHP_EOL );
 		exit( 1 );

@@ -2,15 +2,15 @@
 
 set -euo pipefail
 
-TOOLKIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ANYAPE_WP_TEST_TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ACTION="${1:-check}"
 
 case "$ACTION" in
 	check)
-		EXECUTABLE="$TOOLKIT_DIR/vendor/bin/phpcs"
+		EXECUTABLE="$ANYAPE_WP_TEST_TOOLS_DIR/vendor/bin/phpcs"
 		;;
 	fix)
-		EXECUTABLE="$TOOLKIT_DIR/vendor/bin/phpcbf"
+		EXECUTABLE="$ANYAPE_WP_TEST_TOOLS_DIR/vendor/bin/phpcbf"
 		;;
 	*)
 		echo "ERROR: Expected WPCS action 'check' or 'fix'." >&2
@@ -19,18 +19,18 @@ case "$ACTION" in
 esac
 
 if [[ ! -x "$EXECUTABLE" ]]; then
-	echo "ERROR: WPCS dependencies are missing; run Composer install in .test-tools." >&2
+	echo "ERROR: WPCS dependencies are missing; run Composer install in .anyape-wp-test-tools." >&2
 	exit 1
 fi
 
 FILES=()
 
 while IFS= read -r -d '' file; do
-	if [[ -f "$TOOLKIT_DIR/$file" ]]; then
-		FILES+=("$TOOLKIT_DIR/$file")
+	if [[ -f "$ANYAPE_WP_TEST_TOOLS_DIR/$file" ]]; then
+		FILES+=("$ANYAPE_WP_TEST_TOOLS_DIR/$file")
 	fi
 done < <(
-	git -C "$TOOLKIT_DIR" ls-files \
+	git -C "$ANYAPE_WP_TEST_TOOLS_DIR" ls-files \
 		--cached \
 		--others \
 		--exclude-standard \
@@ -45,7 +45,7 @@ if ((${#FILES[@]} == 0)); then
 fi
 
 if "$EXECUTABLE" \
-	--standard="$TOOLKIT_DIR/phpcs.xml.dist" \
+	--standard="$ANYAPE_WP_TEST_TOOLS_DIR/phpcs.xml.dist" \
 	"${FILES[@]}"; then
 	status=0
 else

@@ -2,7 +2,7 @@
 /**
  * Return a repeatable digest of a DDEV SQL export.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);

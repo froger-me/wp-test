@@ -2,7 +2,7 @@
 /**
  * Read and validate DDEV's machine-readable project description.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);

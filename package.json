@@ -1,8 +1,8 @@
 {
-  "name": "@froger-me/wp-test-tools",
+  "name": "@anyape/anyape-wp-test-tools",
   "private": true,
   "version": "1.0.0",
-  "description": "Local Playwright tests for WordPress plugins and themes.",
+  "description": "Anyape WP Test Tools browser tests for WordPress plugins and themes.",
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:list": "playwright test --list"

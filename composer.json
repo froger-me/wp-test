@@ -1,5 +1,5 @@
 {
-    "name": "froal/test-froger-me-test-tools",
+    "name": "anyape/anyape-wp-test-tools",
     "private": true,
     "require-dev": {
         "dealerdirect/phpcodesniffer-composer-installer": "^1.2",
@@ -17,6 +17,7 @@
     },
     "scripts": {
         "setup": "bash setup-host.sh",
+        "anyape-wp-test-tools:uninstall": "bash uninstall-host.sh",
         "doctor": "bash doctor-host.sh",
         "lint:wpcs": "bash run-wpcs.sh check",
         "format:wpcs": "bash run-wpcs.sh fix",
@@ -38,7 +39,8 @@
         "test:e2e": "bash run-e2e-host.sh"
     },
     "scripts-descriptions": {
-        "setup": "Inspect and guide the local WordPress and test-tool setup.",
+        "setup": "Inspect and guide the local WordPress and Anyape WP Test Tools setup.",
+        "anyape-wp-test-tools:uninstall": "Permanently remove Anyape WP Test Tools and the associated DDEV project after exact confirmation.",
         "doctor": "Run the read-only DDEV and PHPUnit safety preflight.",
         "lint:wpcs": "Check all non-ignored PHP files against WordPress Coding Standards.",
         "format:wpcs": "Automatically fix WordPress Coding Standards violations where possible.",
@@ -47,10 +49,10 @@
         "db:pull": "Confirm, snapshot, download, verify, and import the configured remote database.",
         "snapshot": "Create a named local DDEV database snapshot.",
         "restore": "Confirm and restore a named local DDEV database snapshot.",
-        "reset:tests": "Confirm and recreate only the local wp_tests database.",
+        "reset:tests": "Confirm and recreate only the local anyape_wp_test_tools database.",
         "test": "Run the default PHP tests followed by the browser tests.",
         "test:php": "Run the default WordPress PHP integration profile.",
-        "test:harness": "Run only the toolkit harness tests.",
+        "test:harness": "Run only Anyape WP Test Tools harness tests.",
         "test:plugin": "Run a focused plugin profile; pass the plugin slug after --.",
         "test:theme": "Run a focused theme profile; pass the theme slug after --.",
         "test:multisite": "Run the multisite integration profile.",

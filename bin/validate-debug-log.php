@@ -2,7 +2,7 @@
 /**
  * Validate the local WordPress debug log configuration.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);

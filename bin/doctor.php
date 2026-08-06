@@ -2,15 +2,15 @@
 /**
  * Diagnose the local test environment without mutating it.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-$toolkit_root = dirname( __DIR__ );
-$project_root = dirname( $toolkit_root );
-$config       = require $toolkit_root . '/config.php';
-$quiet        = in_array( '--quiet', $argv, true );
+$anyape_wp_test_tools_root = dirname( __DIR__ );
+$project_root              = dirname( $anyape_wp_test_tools_root );
+$config                    = require $anyape_wp_test_tools_root . '/config.php';
+$quiet                     = in_array( '--quiet', $argv, true );
 
 $diagnostic_errors   = array();
 $diagnostic_warnings = array();
@@ -72,9 +72,9 @@ $check(
 );
 
 $check(
-	'wp_tests' === $test_database,
-	'PHPUnit database is configured as wp_tests.',
-	sprintf( 'Unsafe PHPUnit database configuration: expected wp_tests, got %s.', $test_database )
+	'anyape_wp_test_tools' === $test_database,
+	'PHPUnit database is configured as anyape_wp_test_tools.',
+	sprintf( 'Unsafe PHPUnit database configuration: expected anyape_wp_test_tools, got %s.', $test_database )
 );
 
 $check(
@@ -84,9 +84,9 @@ $check(
 );
 
 $check(
-	'wptests_' === $test_table_prefix,
-	'PHPUnit table prefix is configured as wptests_.',
-	sprintf( 'Unsafe PHPUnit table prefix: expected wptests_, got %s.', $test_table_prefix )
+	'anyape_wptt_' === $test_table_prefix,
+	'PHPUnit table prefix is configured as anyape_wptt_.',
+	sprintf( 'Unsafe PHPUnit table prefix: expected anyape_wptt_, got %s.', $test_table_prefix )
 );
 
 $check(
@@ -163,9 +163,9 @@ $minimum_php = (int) ( $config['minimum_php_version'] ?? 0 );
 
 $check(
 	$minimum_php <= PHP_VERSION_ID,
-	sprintf( 'PHP %s meets the toolkit minimum.', PHP_VERSION ),
+	sprintf( 'PHP %s meets Anyape WP Test Tools minimum.', PHP_VERSION ),
 	sprintf(
-		'PHP %s is unsupported; the toolkit requires PHP %s or later.',
+		'PHP %s is unsupported; Anyape WP Test Tools requires PHP %s or later.',
 		PHP_VERSION,
 		$minimum_php > 0
 			? sprintf( '%d.%d', intdiv( $minimum_php, 10000 ), intdiv( $minimum_php % 10000, 100 ) )
@@ -198,15 +198,15 @@ foreach ( (array) ( $config['required_commands'] ?? array() ) as $command ) {
 	);
 }
 
-$autoload = $toolkit_root . '/vendor/autoload.php';
+$autoload = $anyape_wp_test_tools_root . '/vendor/autoload.php';
 
 $check(
 	is_file( $autoload ),
 	'Composer dependencies are installed.',
-	'Composer dependencies are missing; run Composer install in .test-tools.'
+	'Composer dependencies are missing; run Composer install in .anyape-wp-test-tools.'
 );
 
-$phpunit_binary  = $toolkit_root . '/vendor/bin/phpunit';
+$phpunit_binary  = $anyape_wp_test_tools_root . '/vendor/bin/phpunit';
 $phpunit_version = null;
 
 if ( is_file( $phpunit_binary ) ) {
@@ -242,7 +242,7 @@ $check(
 );
 
 $check(
-	is_dir( $toolkit_root . '/vendor/yoast/phpunit-polyfills' ),
+	is_dir( $anyape_wp_test_tools_root . '/vendor/yoast/phpunit-polyfills' ),
 	'PHPUnit Polyfills are installed.',
 	'PHPUnit Polyfills are missing from vendor/yoast/phpunit-polyfills.'
 );
@@ -274,7 +274,7 @@ if ( is_string( $installed_wordpress_version ) && '' !== $installed_wordpress_ve
 		null !== $branch && isset( $maximums[ $branch ] ),
 		sprintf( 'WordPress %s is covered by the compatibility policy.', $installed_wordpress_version ),
 		sprintf(
-			'WordPress %s is not covered by the toolkit compatibility policy; update wp-test before running.',
+			'WordPress %s is not covered by Anyape WP Test Tools compatibility policy; update anyape-wp-test-tools before running.',
 			$installed_wordpress_version
 		)
 	);
@@ -347,18 +347,18 @@ if ( $mysqli instanceof mysqli && 0 === $mysqli->connect_errno ) {
 
 	$check(
 		$database_exists( $mysqli, $test_database ),
-		'PHPUnit database wp_tests exists.',
-		'PHPUnit database wp_tests does not exist; create it before running tests.'
+		'PHPUnit database anyape_wp_test_tools exists.',
+		'PHPUnit database anyape_wp_test_tools does not exist; create it before running tests.'
 	);
 
 	$mysqli->close();
 }
 
 $generated_paths = array(
-	$toolkit_root,
-	$toolkit_root . '/runtime',
-	$toolkit_root . '/wordpress',
-	$toolkit_root . '/wordpress-tests-lib',
+	$anyape_wp_test_tools_root,
+	$anyape_wp_test_tools_root . '/runtime',
+	$anyape_wp_test_tools_root . '/wordpress',
+	$anyape_wp_test_tools_root . '/wordpress-tests-lib',
 );
 
 foreach ( $generated_paths as $generated_path ) {
@@ -375,7 +375,7 @@ foreach ( $generated_paths as $generated_path ) {
 	);
 }
 
-$tests_config = $toolkit_root . '/wordpress-tests-lib/wp-tests-config.php';
+$tests_config = $anyape_wp_test_tools_root . '/wordpress-tests-lib/wp-tests-config.php';
 
 if ( is_file( $tests_config ) ) {
 	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Read a local generated config before WordPress loads.
@@ -408,7 +408,7 @@ if ( is_file( $tests_config ) ) {
 
 	$check(
 		$generated_database === $test_database,
-		'Generated WordPress test configuration targets wp_tests.',
+		'Generated WordPress test configuration targets anyape_wp_test_tools.',
 		sprintf(
 			'Generated WordPress test DB_NAME mismatch: expected %s, got %s.',
 			$test_database,
@@ -428,7 +428,7 @@ if ( is_file( $tests_config ) ) {
 
 	$check(
 		$generated_prefix === $test_table_prefix,
-		'Generated WordPress test configuration uses prefix wptests_.',
+		'Generated WordPress test configuration uses prefix anyape_wptt_.',
 		sprintf(
 			'Generated WordPress test prefix mismatch: expected %s, got %s.',
 			$test_table_prefix,

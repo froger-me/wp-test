@@ -1,15 +1,15 @@
 <?php
 /**
- * Register the test toolkit class autoloader.
+ * Register the Anyape WP Test Tools class autoloader.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
 spl_autoload_register(
 	static function ( string $class_name ): void {
-		$prefix = 'WpTest\\';
+		$prefix = 'AnyapeWPTestTools\\';
 
 		if ( ! str_starts_with( $class_name, $prefix ) ) {
 			return;

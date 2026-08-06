@@ -2,12 +2,12 @@
 /**
  * Build runtime test manifests from project configuration.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-namespace WpTest;
+namespace AnyapeWPTestTools;
 
 use RuntimeException;
 
@@ -22,11 +22,11 @@ final class ManifestBuilder {
 	private string $project_root;
 
 	/**
-	 * Toolkit root path.
+	 * Anyape WP Test Tools root path.
 	 *
 	 * @var string
 	 */
-	private string $toolkit_root;
+	private string $anyape_wp_test_tools_root;
 
 	/**
 	 * Project plugin directory.
@@ -43,7 +43,7 @@ final class ManifestBuilder {
 	private string $themes_dir;
 
 	/**
-	 * Effective toolkit configuration.
+	 * Effective Anyape WP Test Tools configuration.
 	 *
 	 * @var array<string, mixed>
 	 */
@@ -53,15 +53,15 @@ final class ManifestBuilder {
 	 * Create a manifest builder.
 	 *
 	 * @param string               $project_root  Project root path.
-	 * @param string               $toolkit_root  Toolkit root path.
+	 * @param string               $anyape_wp_test_tools_root  Anyape WP Test Tools root path.
 	 * @param array<string, mixed> $configuration Project configuration.
 	 */
-	public function __construct( string $project_root, string $toolkit_root, array $configuration = array() ) {
-		$this->project_root  = rtrim( $project_root, '/' );
-		$this->toolkit_root  = rtrim( $toolkit_root, '/' );
-		$this->plugins_dir   = $this->project_root . '/wp-content/plugins';
-		$this->themes_dir    = $this->project_root . '/wp-content/themes';
-		$this->configuration = array_replace_recursive(
+	public function __construct( string $project_root, string $anyape_wp_test_tools_root, array $configuration = array() ) {
+		$this->project_root              = rtrim( $project_root, '/' );
+		$this->anyape_wp_test_tools_root = rtrim( $anyape_wp_test_tools_root, '/' );
+		$this->plugins_dir               = $this->project_root . '/wp-content/plugins';
+		$this->themes_dir                = $this->project_root . '/wp-content/themes';
+		$this->configuration             = array_replace_recursive(
 			array(
 				'include_plugins'     => array(),
 				'exclude_plugins'     => array(),
@@ -133,8 +133,8 @@ final class ManifestBuilder {
 			case 'harness':
 				$plugins[]  = $this->fixture_plugin();
 				$themes[]   = $this->fixture_theme();
-				$stylesheet = 'wp-test-theme';
-				$template   = 'wp-test-theme';
+				$stylesheet = 'anyape-wp-test-tools-theme';
+				$template   = 'anyape-wp-test-tools-theme';
 				break;
 
 			default:
@@ -341,11 +341,11 @@ final class ManifestBuilder {
 	 * @return array<string, mixed>
 	 */
 	private function fixture_plugin(): array {
-		$source_path = $this->toolkit_root . '/fixtures/plugins/wp-test-lifecycle';
+		$source_path = $this->anyape_wp_test_tools_root . '/fixtures/plugins/anyape-wp-test-tools-lifecycle';
 		return array(
 			'type'          => 'plugin',
-			'slug'          => 'wp-test-lifecycle',
-			'file'          => 'wp-test-lifecycle/wp-test-lifecycle.php',
+			'slug'          => 'anyape-wp-test-tools-lifecycle',
+			'file'          => 'anyape-wp-test-tools-lifecycle/anyape-wp-test-tools-lifecycle.php',
 			'source_path'   => $source_path,
 			'link_type'     => 'directory',
 			'tests_enabled' => true,
@@ -360,10 +360,10 @@ final class ManifestBuilder {
 	 * @return array<string, mixed>
 	 */
 	private function fixture_theme(): array {
-		$source_path = $this->toolkit_root . '/fixtures/themes/wp-test-theme';
+		$source_path = $this->anyape_wp_test_tools_root . '/fixtures/themes/anyape-wp-test-tools-theme';
 		return array(
 			'type'          => 'theme',
-			'slug'          => 'wp-test-theme',
+			'slug'          => 'anyape-wp-test-tools-theme',
 			'source_path'   => $source_path,
 			'link_type'     => 'directory',
 			'tests_enabled' => true,

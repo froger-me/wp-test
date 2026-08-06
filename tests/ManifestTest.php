@@ -2,23 +2,23 @@
 /**
  * Generated manifest tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-use WpTest\IntegrationTestCase;
-use WpTest\Manifest;
+use AnyapeWPTestTools\IntegrationTestCase;
+use AnyapeWPTestTools\Manifest;
 
 /** Tests generated manifest and PHPUnit configuration behavior. */
 final class ManifestTest extends IntegrationTestCase {
 
 	/** Verifies generated testsuites and selected extension paths. */
 	public function test_generated_phpunit_configuration_contains_harness_and_selected_tests(): void {
-		$toolkit  = dirname( __DIR__ );
-		$manifest = Manifest::from_file( $toolkit . '/runtime/manifest.json' );
+		$anyape_wp_test_tools = dirname( __DIR__ );
+		$manifest             = Manifest::from_file( $anyape_wp_test_tools . '/runtime/manifest.json' );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Assert a local generated file's contents.
-		$config = (string) file_get_contents( $toolkit . '/runtime/phpunit.xml' );
+		$config = (string) file_get_contents( $anyape_wp_test_tools . '/runtime/phpunit.xml' );
 
 		$this->assertStringContainsString(
 			'<testsuite name="Harness">',
@@ -52,13 +52,13 @@ final class ManifestTest extends IntegrationTestCase {
 			dirname( __DIR__ ) . '/runtime/phpunit.xml'
 		);
 
-		if ( getenv( 'WP_TEST_INCLUDE_DESTRUCTIVE' ) === '1' ) {
+		if ( getenv( 'ANYAPE_WP_TEST_TOOLS_INCLUDE_DESTRUCTIVE' ) === '1' ) {
 			$this->assertStringNotContainsString( '<group>destructive</group>', $config );
 		} else {
 			$this->assertStringContainsString( '<group>destructive</group>', $config );
 		}
 
-		if ( getenv( 'WP_TEST_COVERAGE' ) === '1' ) {
+		if ( getenv( 'ANYAPE_WP_TEST_TOOLS_COVERAGE' ) === '1' ) {
 			$this->assertStringNotContainsString( '<group>coverage</group>', $config );
 		} else {
 			$this->assertStringContainsString( '<group>coverage</group>', $config );
@@ -67,10 +67,10 @@ final class ManifestTest extends IntegrationTestCase {
 
 	/** Verifies that fixture self-tests are limited to the harness profile. */
 	public function test_fixture_self_tests_are_limited_to_harness_profile(): void {
-		$toolkit  = dirname( __DIR__ );
-		$manifest = Manifest::from_file( $toolkit . '/runtime/manifest.json' );
+		$anyape_wp_test_tools = dirname( __DIR__ );
+		$manifest             = Manifest::from_file( $anyape_wp_test_tools . '/runtime/manifest.json' );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Assert a local generated file's contents.
-		$config = (string) file_get_contents( $toolkit . '/runtime/phpunit.xml' );
+		$config = (string) file_get_contents( $anyape_wp_test_tools . '/runtime/phpunit.xml' );
 
 		if ( $manifest->profile() === 'harness' ) {
 			$this->assertStringNotContainsString(

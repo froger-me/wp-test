@@ -1,8 +1,8 @@
 <?php
 /**
- * Merge toolkit commands into the WordPress root composer.json.
+ * Merge Anyape WP Test Tools commands into the WordPress root composer.json.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
@@ -14,24 +14,24 @@ declare(strict_types=1);
  * Merge root Composer commands without replacing unrelated content.
  *
  * @param string $root_file    Root composer.json path.
- * @param string $toolkit_file Toolkit composer.json path.
+ * @param string $anyape_wp_test_tools_file Anyape WP Test Tools composer.json path.
  * @param bool   $check_only   Report a pending change without writing.
  * @return array<string, mixed>
  * @throws RuntimeException When JSON is invalid or a command conflicts.
  */
-function wp_test_update_root_composer( string $root_file, string $toolkit_file, bool $check_only = false ): array {
-	$toolkit = wp_test_read_json_file( $toolkit_file );
-	$root    = is_file( $root_file ) ? wp_test_read_json_file( $root_file ) : array();
-	$scripts = $toolkit['scripts'] ?? null;
+function anyape_wp_test_tools_update_root_composer( string $root_file, string $anyape_wp_test_tools_file, bool $check_only = false ): array {
+	$anyape_wp_test_tools = anyape_wp_test_tools_read_json_file( $anyape_wp_test_tools_file );
+	$root                 = is_file( $root_file ) ? anyape_wp_test_tools_read_json_file( $root_file ) : array();
+	$scripts              = $anyape_wp_test_tools['scripts'] ?? null;
 	if ( ! is_array( $scripts ) ) {
-		throw new RuntimeException( 'Toolkit composer.json does not contain a scripts object.' );
+		throw new RuntimeException( 'Anyape WP Test Tools composer.json does not contain a scripts object.' );
 	}
 	$expected = array();
 	foreach ( $scripts as $name => $command ) {
 		if ( ! is_string( $name ) || ! is_string( $command ) || ! str_starts_with( $command, 'bash ' ) ) {
 			continue;
 		}
-		$expected[ $name ] = 'bash .test-tools/' . substr( $command, strlen( 'bash ' ) );
+		$expected[ $name ] = 'bash .anyape-wp-test-tools/' . substr( $command, strlen( 'bash ' ) );
 	}
 
 	$root['name']    = $root['name'] ?? 'local/wordpress-development-site';
@@ -51,7 +51,7 @@ function wp_test_update_root_composer( string $root_file, string $toolkit_file, 
 		if ( isset( $root['scripts'][ $name ] ) && $root['scripts'][ $name ] !== $command ) {
 			$without_bash = str_starts_with( $command, 'bash ' ) ? substr( $command, 5 ) : $command;
 			if ( $root['scripts'][ $name ] !== $without_bash ) {
-				throw new RuntimeException( "Root composer.json command '{$name}' conflicts with the toolkit command. Rename or remove it before setup." );
+				throw new RuntimeException( "Root composer.json command '{$name}' conflicts with Anyape WP Test Tools command. Rename or remove it before setup." );
 			}
 		}
 		$root['scripts'][ $name ] = $command;
@@ -74,13 +74,13 @@ function wp_test_update_root_composer( string $root_file, string $toolkit_file, 
 
 	$backup = null;
 	if ( is_file( $root_file ) ) {
-		$backup = wp_test_composer_backup_name( $root_file );
+		$backup = anyape_wp_test_tools_composer_backup_name( $root_file );
 		if ( ! copy( $root_file, $backup ) ) {
 			throw new RuntimeException( 'Could not back up root composer.json.' );
 		}
 	}
-	wp_test_composer_atomic_write( $root_file, $encoded );
-	wp_test_read_json_file( $root_file );
+	anyape_wp_test_tools_composer_atomic_write( $root_file, $encoded );
+	anyape_wp_test_tools_read_json_file( $root_file );
 	return array(
 		'changed' => true,
 		'backup'  => $backup,
@@ -94,7 +94,7 @@ function wp_test_update_root_composer( string $root_file, string $toolkit_file, 
  * @return array<string, mixed>
  * @throws RuntimeException When the file is missing or does not contain an object.
  */
-function wp_test_read_json_file( string $path ): array {
+function anyape_wp_test_tools_read_json_file( string $path ): array {
 	if ( ! is_file( $path ) ) {
 		throw new RuntimeException( 'JSON file does not exist: ' . $path );
 	}
@@ -112,12 +112,12 @@ function wp_test_read_json_file( string $path ): array {
  * @param string $contents Complete JSON contents.
  * @throws RuntimeException When the destination cannot be written atomically.
  */
-function wp_test_composer_atomic_write( string $path, string $contents ): void {
+function anyape_wp_test_tools_composer_atomic_write( string $path, string $contents ): void {
 	$directory = dirname( $path );
 	if ( ! is_dir( $directory ) || ! is_writable( $directory ) ) {
 		throw new RuntimeException( 'Composer destination directory is not writable: ' . $directory );
 	}
-	$temp = tempnam( $directory, '.composer-test-tools-' );
+	$temp = tempnam( $directory, '.composer-anyape-wp-test-tools-' );
 	if ( false === $temp || false === file_put_contents( $temp, $contents ) || ! rename( $temp, $path ) ) {
 		if ( is_string( $temp ) && file_exists( $temp ) ) {
 			unlink( $temp );
@@ -132,8 +132,8 @@ function wp_test_composer_atomic_write( string $path, string $contents ): void {
  * @param string $path File being backed up.
  * @return string
  */
-function wp_test_composer_backup_name( string $path ): string {
-	$base   = $path . '.before-test-tools-' . gmdate( 'Ymd\THis\Z' );
+function anyape_wp_test_tools_composer_backup_name( string $path ): string {
+	$base   = $path . '.before-anyape-wp-test-tools-' . gmdate( 'Ymd\THis\Z' );
 	$backup = $base;
 	$suffix = 1;
 	while ( file_exists( $backup ) ) {
@@ -148,11 +148,11 @@ if ( realpath( (string) ( $argv[0] ?? '' ) ) === __FILE__ ) {
 	$check_only = in_array( '--check', $arguments, true );
 	$arguments  = array_values( array_diff( $arguments, array( '--check' ) ) );
 	if ( 2 !== count( $arguments ) ) {
-		fwrite( STDERR, "ERROR: Usage: php update-root-composer.php [--check] <root-composer.json> <toolkit-composer.json>\n" );
+		fwrite( STDERR, "ERROR: Usage: php update-root-composer.php [--check] <root-composer.json> <anyape-wp-test-tools-composer.json>\n" );
 		exit( 1 );
 	}
 	try {
-		echo json_encode( wp_test_update_root_composer( $arguments[0], $arguments[1], $check_only ), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ), PHP_EOL;
+		echo json_encode( anyape_wp_test_tools_update_root_composer( $arguments[0], $arguments[1], $check_only ), JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ), PHP_EOL;
 	} catch ( Throwable $error ) {
 		fwrite( STDERR, 'ERROR: ' . $error->getMessage() . PHP_EOL );
 		exit( 1 );

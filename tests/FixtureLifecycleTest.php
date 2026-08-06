@@ -2,12 +2,12 @@
 /**
  * Fixture plugin lifecycle tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-use WpTest\IntegrationTestCase;
+use AnyapeWPTestTools\IntegrationTestCase;
 
 /**
  * Tests fixture activation, deactivation, and uninstall behavior.
@@ -16,7 +16,7 @@ use WpTest\IntegrationTestCase;
  */
 final class FixtureLifecycleTest extends IntegrationTestCase {
 
-	private const PLUGIN = 'wp-test-lifecycle/wp-test-lifecycle.php';
+	private const PLUGIN = 'anyape-wp-test-tools-lifecycle/anyape-wp-test-tools-lifecycle.php';
 
 	/** Restores fixture state after each test. */
 	protected function tearDown(): void {
@@ -31,7 +31,7 @@ final class FixtureLifecycleTest extends IntegrationTestCase {
 	private function restore_fixture_selection(): void {
 		require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
-		$manifest = \WpTest\Manifest::from_file(
+		$manifest = \AnyapeWPTestTools\Manifest::from_file(
 			dirname( __DIR__ ) . '/runtime/manifest.json'
 		);
 		$selected = in_array(
@@ -50,7 +50,7 @@ final class FixtureLifecycleTest extends IntegrationTestCase {
 
 		if (
 			is_plugin_active( self::PLUGIN ) ||
-			get_option( 'wp_test_fixture_activation_count', false ) !== false
+			get_option( 'anyape_wp_test_tools_fixture_activation_count', false ) !== false
 		) {
 			$this->uninstall_plugin( self::PLUGIN );
 		}
@@ -66,32 +66,32 @@ final class FixtureLifecycleTest extends IntegrationTestCase {
 
 		$this->activate_plugin( self::PLUGIN );
 
-		$table       = $GLOBALS['wpdb']->prefix . 'wp_test_fixture_items';
-		$first_count = (int) get_option( 'wp_test_fixture_activation_count' );
+		$table       = $GLOBALS['wpdb']->prefix . 'anyape_wp_test_tools_fixture_items';
+		$first_count = (int) get_option( 'anyape_wp_test_tools_fixture_activation_count' );
 
 		$this->assertGreaterThan( 0, $first_count );
 		$this->assert_table_exists( $table );
 		$this->assert_table_has_column( $table, 'label' );
-		$this->assertNotNull( get_role( 'wp_test_fixture_role' ) );
-		$this->assert_cron_event_scheduled( 'wp_test_fixture_cron' );
+		$this->assertNotNull( get_role( 'anyape_wp_test_tools_fixture_role' ) );
+		$this->assert_cron_event_scheduled( 'anyape_wp_test_tools_fixture_cron' );
 
 		$this->deactivate_plugin( self::PLUGIN );
 
 		$this->assertSame(
 			$first_count,
-			(int) get_option( 'wp_test_fixture_activation_count' )
+			(int) get_option( 'anyape_wp_test_tools_fixture_activation_count' )
 		);
 		$this->assert_table_exists( $table );
-		$this->assert_cron_event_not_scheduled( 'wp_test_fixture_cron' );
+		$this->assert_cron_event_not_scheduled( 'anyape_wp_test_tools_fixture_cron' );
 
 		$this->activate_plugin( self::PLUGIN );
 
 		$this->assertSame(
 			$first_count + 1,
-			(int) get_option( 'wp_test_fixture_activation_count' )
+			(int) get_option( 'anyape_wp_test_tools_fixture_activation_count' )
 		);
 		$this->assert_table_exists( $table );
-		$this->assert_cron_event_scheduled( 'wp_test_fixture_cron' );
+		$this->assert_cron_event_scheduled( 'anyape_wp_test_tools_fixture_cron' );
 	}
 
 	/**
@@ -107,13 +107,13 @@ final class FixtureLifecycleTest extends IntegrationTestCase {
 		}
 
 		update_option( 'other_plugin_owned_data', 'preserve' );
-		$table = $GLOBALS['wpdb']->prefix . 'wp_test_fixture_items';
+		$table = $GLOBALS['wpdb']->prefix . 'anyape_wp_test_tools_fixture_items';
 
 		$this->uninstall_plugin( self::PLUGIN );
 
-		$this->assertFalse( get_option( 'wp_test_fixture_activation_count', false ) );
-		$this->assertNull( get_role( 'wp_test_fixture_role' ) );
-		$this->assert_cron_event_not_scheduled( 'wp_test_fixture_cron' );
+		$this->assertFalse( get_option( 'anyape_wp_test_tools_fixture_activation_count', false ) );
+		$this->assertNull( get_role( 'anyape_wp_test_tools_fixture_role' ) );
+		$this->assert_cron_event_not_scheduled( 'anyape_wp_test_tools_fixture_cron' );
 		$this->assertSame( 'preserve', get_option( 'other_plugin_owned_data' ) );
 
 		$found = $GLOBALS['wpdb']->get_var(

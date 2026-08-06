@@ -1,24 +1,24 @@
 <?php
 /**
- * Plugin Name: WP Test Lifecycle Fixture
+ * Plugin Name: Anyape WP Test Tools Lifecycle Fixture
  * Description: Internal fixture plugin used to validate the shared PHPUnit harness.
  * Version: 1.0.0
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
 defined( 'ABSPATH' ) || exit;
 
-const WP_TEST_FIXTURE_OPTION = 'wp_test_fixture_activation_count';
-const WP_TEST_FIXTURE_CRON   = 'wp_test_fixture_cron';
+const ANYAPE_WP_TEST_TOOLS_FIXTURE_OPTION = 'anyape_wp_test_tools_fixture_activation_count';
+const ANYAPE_WP_TEST_TOOLS_FIXTURE_CRON   = 'anyape_wp_test_tools_fixture_cron';
 
 /** Return the fixture plugin's database table name. */
-function wp_test_fixture_table_name(): string {
+function anyape_wp_test_tools_fixture_table_name(): string {
 	global $wpdb;
 
-	return $wpdb->prefix . 'wp_test_fixture_items';
+	return $wpdb->prefix . 'anyape_wp_test_tools_fixture_items';
 }
 
 register_activation_hook(
@@ -28,7 +28,7 @@ register_activation_hook(
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-		$table           = wp_test_fixture_table_name();
+		$table           = anyape_wp_test_tools_fixture_table_name();
 		$charset_collate = $wpdb->get_charset_collate();
 
 		dbDelta(
@@ -41,24 +41,24 @@ register_activation_hook(
 			) {$charset_collate};"
 		);
 
-		$count = (int) get_option( WP_TEST_FIXTURE_OPTION, 0 );
-		update_option( WP_TEST_FIXTURE_OPTION, $count + 1, false );
+		$count = (int) get_option( ANYAPE_WP_TEST_TOOLS_FIXTURE_OPTION, 0 );
+		update_option( ANYAPE_WP_TEST_TOOLS_FIXTURE_OPTION, $count + 1, false );
 
 		add_role(
-			'wp_test_fixture_role',
-			'WP Test Fixture Role',
+			'anyape_wp_test_tools_fixture_role',
+			'Anyape WP Test Tools Fixture Role',
 			array( 'read' => true )
 		);
 
-		if ( ! wp_next_scheduled( WP_TEST_FIXTURE_CRON ) ) {
+		if ( ! wp_next_scheduled( ANYAPE_WP_TEST_TOOLS_FIXTURE_CRON ) ) {
 			wp_schedule_event(
 				time() + HOUR_IN_SECONDS,
 				'hourly',
-				WP_TEST_FIXTURE_CRON
+				ANYAPE_WP_TEST_TOOLS_FIXTURE_CRON
 			);
 		}
 
-		update_option( 'wp_test_fixture_rewrite_flushed', 'yes', false );
+		update_option( 'anyape_wp_test_tools_fixture_rewrite_flushed', 'yes', false );
 		flush_rewrite_rules( false );
 	}
 );
@@ -66,14 +66,14 @@ register_activation_hook(
 register_deactivation_hook(
 	__FILE__,
 	static function (): void {
-		wp_clear_scheduled_hook( WP_TEST_FIXTURE_CRON );
+		wp_clear_scheduled_hook( ANYAPE_WP_TEST_TOOLS_FIXTURE_CRON );
 	}
 );
 
 /** Register the fixture plugin's protected REST route. */
-function wp_test_fixture_register_rest_route(): void {
+function anyape_wp_test_tools_fixture_register_rest_route(): void {
 	register_rest_route(
-		'wp-test/v1',
+		'anyape-wp-test-tools/v1',
 		'/protected',
 		array(
 			'methods'             => 'GET',
@@ -85,4 +85,4 @@ function wp_test_fixture_register_rest_route(): void {
 	);
 }
 
-add_action( 'rest_api_init', 'wp_test_fixture_register_rest_route' );
+add_action( 'rest_api_init', 'anyape_wp_test_tools_fixture_register_rest_route' );

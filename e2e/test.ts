@@ -37,4 +37,4 @@ export const test = base.extend<{ browserDiagnostics: void }>({
 });
 
 export { expect };
-export const lowerCapabilityStorageState = process.env.WP_TEST_E2E_LOWER_STATE as string;
+export const lowerCapabilityStorageState = process.env.ANYAPE_WP_TEST_TOOLS_E2E_LOWER_STATE as string;

@@ -4,14 +4,14 @@
 
 Phases 1 through 3 are complete. The remote database refresh, local snapshot, restore, and test-database reset commands from Phase 4 are also complete.
 
-The toolkit currently provides:
+Anyape WP Test Tools currently provides:
 
 - read-only `composer doctor` checks;
 - local WordPress log viewing and clearing;
 - separate PHP and browser tests, with `composer test` running both;
 - active plugin and theme test discovery;
 - focused plugin, theme, multisite, destructive, coverage, and report commands;
-- a separate `wp_tests` database and isolated test files;
+- a separate `anyape_wp_test_tools` database and isolated test files;
 - automatic restoration of the working database and protected files after browser tests;
 - confirmed remote database refresh with an automatic local snapshot; and
 - explicit local snapshot, restore, and test-database reset commands.
@@ -44,7 +44,7 @@ composer test:e2e
 
 ### Phase 1 — WordPress PHP tests
 
-The toolkit checks the local environment, uses only `wp_tests`, loads the working site's active plugins and themes, finds ordinary plugin and theme test files, and provides focused and specialist test commands.
+Anyape WP Test Tools checks the local environment, uses only `anyape_wp_test_tools`, loads the working site's active plugins and themes, finds ordinary plugin and theme test files, and provides focused and specialist test commands.
 
 ### Phase 2 — WordPress logging commands
 
@@ -52,13 +52,13 @@ The toolkit checks the local environment, uses only `wp_tests`, loads the workin
 
 ### Phase 3 — Browser tests
 
-The browser tests use Chromium against the local DDEV site. Every run saves the working database and protected file paths, creates temporary users and data, runs toolkit and extension tests, then restores and compares the original data and files.
+The browser tests use Chromium against the local DDEV site. Every run saves the working database and protected file paths, creates temporary users and data, runs Anyape WP Test Tools and extension tests, then restores and compares the original data and files.
 
 ### Phase 4 — Database utilities completed so far
 
 `composer db:pull` uses an ignored local file for the SSH alias, remote path, remote URL, and local URL. It confirms the source and destination, downloads and verifies a compressed export, creates a local snapshot, imports only into `db`, replaces the old URL safely throughout WordPress data, and attempts restoration if importing fails.
 
-`composer snapshot` creates a named or dated DDEV database snapshot. `composer restore` requires an exact name and confirmation. `composer reset:tests` requires confirmation and can recreate only `wp_tests`.
+`composer snapshot` creates a named or dated DDEV database snapshot. `composer restore` requires an exact name and confirmation. `composer reset:tests` requires confirmation and can recreate only `anyape_wp_test_tools`.
 
 ## Phase 5 — Guided project setup (complete)
 
@@ -70,15 +70,15 @@ The long manual sequence from the former Step 3 onward is replaced by one guided
 
 1. install Docker, DDEV, Composer, Node.js, and Git;
 2. run `ddev config` in the existing WordPress directory; and
-3. clone this toolkit as `.test-tools`.
+3. clone Anyape WP Test Tools as `.anyape-wp-test-tools`.
 
 The next command is:
 
 ```text
-bash .test-tools/setup-host.sh
+bash .anyape-wp-test-tools/setup-host.sh
 ```
 
-The direct shell command works before toolkit packages or a root `composer.json` exist. Setup adds `composer setup` to both Composer files so later runs work from either the WordPress root or `.test-tools`.
+The direct shell command works before Anyape WP Test Tools packages or a root `composer.json` exist. Setup adds `composer setup` to both Composer files so later runs work from either the WordPress root or `.anyape-wp-test-tools`.
 
 The command reduces repetition without pretending every WordPress installation is arranged the same way. It explains proposed changes, asks before important changes, and gives clear manual instructions when it cannot make a safe decision.
 
@@ -95,10 +95,10 @@ The command:
 7. add Subversion to the DDEV web image when it is missing, explain that this rebuilds the image, and ask before doing it;
 8. start DDEV as an explicit setup action, never as a hidden action inside ordinary test commands;
 9. ask how to prepare the working database: keep the existing database, make a clean WordPress installation, or use `composer db:pull`;
-10. create or repair only the fixed `wp_tests` database and its permission for the DDEV database user;
-11. install the toolkit's PHP packages inside DDEV and its Node.js packages and Chromium browser on the host;
-12. merge the toolkit commands into the root `composer.json` without replacing unrelated packages, settings, or commands;
-13. offer to create `.wp-test.php` and `db-refresh.local.php` from their examples, without inventing project-specific values;
+10. create or repair only the fixed `anyape_wp_test_tools` database and its permission for the DDEV database user;
+11. install Anyape WP Test Tools' PHP packages inside DDEV and its Node.js packages and Chromium browser on the host;
+12. merge Anyape WP Test Tools commands into the root `composer.json` without replacing unrelated packages, settings, or commands;
+13. offer to create `.anyape-wp-test-tools.php` and `db-refresh-local.php` from their examples, without inventing project-specific values;
 14. run `composer doctor` and `composer test:harness`; and
 15. print a short report of completed work, skipped work, and anything the user still needs to edit.
 
@@ -130,11 +130,11 @@ The rewritten guide must retain instructions for anything the command cannot saf
 
 - the remote database name, user, password, host, and where production receives those values;
 - the remote server's PHP error-log path;
-- whether `.ddev/` is committed and whether `.test-tools` is a normal nested clone, a Git submodule, or excluded from the parent repository;
+- whether `.ddev/` is committed and whether `.anyape-wp-test-tools` is a normal nested clone, a Git submodule, or excluded from the parent repository;
 - the deployment exclusion format used by SFTP, rsync, a hosting control panel, or another deployment method;
 - the project name, desired PHP and database versions, local site title, administrator details, and working database source;
 - the SSH alias, remote WordPress path, remote URL, and local URL used by `composer db:pull`;
-- plugin- or theme-specific include, exclude, dependency, setup-file, and protected-file choices in `.wp-test.php`;
+- plugin- or theme-specific include, exclude, dependency, setup-file, and protected-file choices in `.anyape-wp-test-tools.php`;
 - optional local services such as Redis or compatible object storage; and
 - checks that only the real hosting environment can prove.
 
@@ -146,8 +146,8 @@ The command must be safe to run more than once.
 
 - A second run with no project changes reports that each item is complete and does not rewrite files or rebuild DDEV.
 - Matching Composer commands and ignore entries are not duplicated.
-- Existing toolkit packages are checked before installation runs again.
-- An existing `wp_tests` database remains unless it is missing or the user explicitly chooses to recreate it.
+- Existing Anyape WP Test Tools packages are checked before installation runs again.
+- An existing `anyape_wp_test_tools` database remains unless it is missing or the user explicitly chooses to recreate it.
 - Backups are retained and named clearly.
 - `--check` inspects and reports without changing anything.
 - `--yes` accepts only changes whose targets and values are already clear. It does not answer questions about the database source, remote values, deployment policy, or an unfamiliar `wp-config.php`.
@@ -157,13 +157,13 @@ The command must be safe to run more than once.
 The implementation uses these files:
 
 ```text
-.test-tools/setup-host.sh
-.test-tools/bin/inspect-setup.php
-.test-tools/bin/update-wp-config.php
-.test-tools/bin/update-root-composer.php
-.test-tools/bin/update-ignore-files.php
-.test-tools/fixtures/setup/
-.test-tools/tests/SetupFilesTest.php
+.anyape-wp-test-tools/setup-host.sh
+.anyape-wp-test-tools/bin/inspect-setup.php
+.anyape-wp-test-tools/bin/update-wp-config.php
+.anyape-wp-test-tools/bin/update-root-composer.php
+.anyape-wp-test-tools/bin/update-ignore-files.php
+.anyape-wp-test-tools/fixtures/setup/
+.anyape-wp-test-tools/tests/SetupFilesTest.php
 ```
 
 - `setup-host.sh` owns the questions, confirmations, host-program checks, DDEV commands, package installation, database choices, and final report. It does not contain file-editing rules.
@@ -187,7 +187,7 @@ The included example WordPress directories cover:
 - duplicate or unusual includes that must be refused;
 - an empty root `composer.json`;
 - an existing root Composer project with unrelated packages and commands;
-- a normal nested toolkit clone and a declared Git submodule; and
+- a normal nested Anyape WP Test Tools clone and a declared Git submodule; and
 - repeated setup runs that produce no second change.
 
 Automated checks prove:
@@ -197,7 +197,7 @@ Automated checks prove:
 - unfamiliar `wp-config.php` layouts are reported and not changed;
 - root Composer settings are merged rather than replaced;
 - deployment and Git exclusions are not duplicated;
-- only `wp_tests` can be created or repaired by the test-database step;
+- only `anyape_wp_test_tools` can be created or repaired by the test-database step;
 - no working database is imported, replaced, or reset without a clear choice and confirmation; and
 - the file writers pass against private temporary example directories, while the consuming DDEV project passes `composer doctor` and the complete PHP and browser test command.
 
@@ -208,14 +208,14 @@ The old 18-step guide was replaced instead of receiving another layer of instruc
 1. explain what the setup command will and will not do;
 2. install the host programs;
 3. run the initial `ddev config` command;
-4. install `.test-tools`;
-5. run `bash .test-tools/setup-host.sh`;
+4. install `.anyape-wp-test-tools`;
+5. run `bash .anyape-wp-test-tools/setup-host.sh`;
 6. choose how to prepare the working database;
 7. complete project-specific configuration deliberately left for the user;
 8. review the setup report and run all tests;
 9. add ordinary plugin and theme tests;
 10. use daily commands for tests, logs, database refresh, snapshots, and reset;
-11. update WordPress and the toolkit; and
+11. update WordPress and Anyape WP Test Tools; and
 12. solve common setup problems.
 
 Keep manual `wp-config.php`, deployment exclusion, database creation, package installation, and root Composer examples in clearly labelled fallback sections. They remain necessary for unusual projects and for understanding what the command changed, but they do not interrupt the normal setup path.
@@ -226,12 +226,12 @@ The rewrite removes the old numbering and repeated command lists. Each command h
 
 The completed phase satisfies these checks:
 
-- a standard existing WordPress directory can go from initial `ddev config` and toolkit clone to passing `composer doctor` through the guided command;
+- a standard existing WordPress directory can go from initial `ddev config` and Anyape WP Test Tools clone to passing `composer doctor` through the guided command;
 - the user sees and approves every important lasting change;
 - a custom or unclear `wp-config.php` is preserved and receives useful manual instructions;
 - running setup twice produces no unwanted changes;
 - no secret or remote server value is added to tracked files, reports, or command output;
-- the root and `.test-tools` Composer commands remain aligned;
+- the root and `.anyape-wp-test-tools` Composer commands remain aligned;
 - the rewritten `SETUP.md` matches the command's real behavior; and
 - the existing PHP and browser tests still pass with `composer test`.
 

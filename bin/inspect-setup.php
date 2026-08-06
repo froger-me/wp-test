@@ -2,7 +2,7 @@
 /**
  * Inspect a WordPress directory before guided local setup.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
@@ -15,7 +15,7 @@ declare(strict_types=1);
  * @param string $project_root WordPress root directory.
  * @return array<string, mixed>
  */
-function wp_test_inspect_setup( string $project_root ): array {
+function anyape_wp_test_tools_inspect_setup( string $project_root ): array {
 	$project_root = rtrim( $project_root, DIRECTORY_SEPARATOR );
 	$required     = array( 'wp-admin', 'wp-content', 'wp-includes', 'wp-config.php' );
 	$missing      = array();
@@ -27,7 +27,7 @@ function wp_test_inspect_setup( string $project_root ): array {
 
 	$wp_config_path = $project_root . '/wp-config.php';
 	$wp_config      = is_file( $wp_config_path ) ? (string) file_get_contents( $wp_config_path ) : '';
-	$wp             = wp_test_inspect_wp_config( $wp_config );
+	$wp             = anyape_wp_test_tools_inspect_wp_config( $wp_config );
 	$ddev_path      = $project_root . '/.ddev/config.yaml';
 	$ddev           = is_file( $ddev_path ) ? (string) file_get_contents( $ddev_path ) : '';
 	$packages       = array();
@@ -48,7 +48,7 @@ function wp_test_inspect_setup( string $project_root ): array {
 
 	$git_mode    = 'none';
 	$git_modules = $project_root . '/.gitmodules';
-	if ( is_file( $git_modules ) && str_contains( (string) file_get_contents( $git_modules ), '.test-tools' ) ) {
+	if ( is_file( $git_modules ) && str_contains( (string) file_get_contents( $git_modules ), '.anyape-wp-test-tools' ) ) {
 		$git_mode = 'submodule';
 	} elseif ( is_dir( $project_root . '/.git' ) || is_file( $project_root . '/.git' ) ) {
 		$git_mode = 'parent';
@@ -75,8 +75,8 @@ function wp_test_inspect_setup( string $project_root ): array {
 		'root_gitignore_exists' => is_file( $project_root . '/.gitignore' ),
 		'git_mode'              => $git_mode,
 		'sftp_config_exists'    => is_file( $project_root . '/.vscode/sftp.json' ),
-		'project_test_config'   => is_file( $project_root . '/.wp-test.php' ),
-		'db_refresh_config'     => is_file( $project_root . '/.test-tools/db-refresh.local.php' ),
+		'project_test_config'   => is_file( $project_root . '/.anyape-wp-test-tools.php' ),
+		'db_refresh_config'     => is_file( $project_root . '/.anyape-wp-test-tools/db-refresh-local.php' ),
 	);
 }
 
@@ -86,7 +86,7 @@ function wp_test_inspect_setup( string $project_root ): array {
  * @param string $contents wp-config.php contents.
  * @return array<string, mixed>
  */
-function wp_test_inspect_wp_config( string $contents ): array {
+function anyape_wp_test_tools_inspect_wp_config( string $contents ): array {
 	$counts     = array(
 		'db_name'      => preg_match_all( "/define\s*\(\s*['\"]DB_NAME['\"]/", $contents ),
 		'db_user'      => preg_match_all( "/define\s*\(\s*['\"]DB_USER['\"]/", $contents ),
@@ -154,7 +154,7 @@ if ( realpath( (string) ( $argv[0] ?? '' ) ) === __FILE__ ) {
 		exit( 1 );
 	}
 	try {
-		echo json_encode( wp_test_inspect_setup( $argv[1] ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ), PHP_EOL;
+		echo json_encode( anyape_wp_test_tools_inspect_setup( $argv[1] ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR ), PHP_EOL;
 	} catch ( Throwable $error ) {
 		fwrite( STDERR, 'ERROR: ' . $error->getMessage() . PHP_EOL );
 		exit( 1 );

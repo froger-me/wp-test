@@ -2,9 +2,9 @@ import { defineConfig, devices, type Project } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const toolkitRoot = __dirname;
-const projectRoot = path.dirname(toolkitRoot);
-const manifestPath = requiredEnvironment('WP_TEST_E2E_MANIFEST');
+const anyapeWpTestToolsRoot = __dirname;
+const projectRoot = path.dirname(anyapeWpTestToolsRoot);
+const manifestPath = requiredEnvironment('ANYAPE_WP_TEST_TOOLS_E2E_MANIFEST');
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
   plugins?: ExtensionEntry[];
   themes?: ExtensionEntry[];
@@ -19,8 +19,8 @@ type ExtensionEntry = {
 
 const projects: Project[] = [
   {
-    name: 'toolkit',
-    testDir: path.join(toolkitRoot, 'e2e', 'specs'),
+    name: 'anyape-wp-test-tools',
+    testDir: path.join(anyapeWpTestToolsRoot, 'e2e', 'specs'),
     testMatch: '**/*.spec.ts',
   },
 ];
@@ -43,22 +43,22 @@ for (const extension of [...(manifest.plugins ?? []), ...(manifest.themes ?? [])
 export default defineConfig({
   fullyParallel: false,
   forbidOnly: true,
-  globalSetup: path.join(toolkitRoot, 'e2e', 'global-setup.ts'),
-  outputDir: path.join(toolkitRoot, 'test-results'),
+  globalSetup: path.join(anyapeWpTestToolsRoot, 'e2e', 'global-setup.ts'),
+  outputDir: path.join(anyapeWpTestToolsRoot, 'test-results'),
   projects,
   reporter: [
     ['line'],
-    [path.join(toolkitRoot, 'e2e', 'failure-reporter.ts')],
-    ['html', { outputFolder: path.join(toolkitRoot, 'playwright-report'), open: 'never' }],
+    [path.join(anyapeWpTestToolsRoot, 'e2e', 'failure-reporter.ts')],
+    ['html', { outputFolder: path.join(anyapeWpTestToolsRoot, 'playwright-report'), open: 'never' }],
   ],
   retries: 0,
-  tsconfig: path.join(toolkitRoot, 'tsconfig.json'),
+  tsconfig: path.join(anyapeWpTestToolsRoot, 'tsconfig.json'),
   timeout: 30_000,
   use: {
     ...devices['Desktop Chrome'],
-    baseURL: requiredEnvironment('WP_TEST_E2E_BASE_URL'),
+    baseURL: requiredEnvironment('ANYAPE_WP_TEST_TOOLS_E2E_BASE_URL'),
     ignoreHTTPSErrors: true,
-    storageState: requiredEnvironment('WP_TEST_E2E_ADMIN_STATE'),
+    storageState: requiredEnvironment('ANYAPE_WP_TEST_TOOLS_E2E_ADMIN_STATE'),
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },

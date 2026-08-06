@@ -2,12 +2,12 @@
 /**
  * In-memory WordPress mail capture for integration tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-namespace WpTest;
+namespace AnyapeWPTestTools;
 
 /** Captures messages sent through wp_mail() during a test. */
 final class MailCapture {

@@ -2,7 +2,7 @@
 /**
  * Capture and restore file paths that browser tests are allowed to change.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
@@ -10,20 +10,20 @@ declare(strict_types=1);
 // phpcs:disable WordPress.WP.AlternativeFunctions -- This standalone CLI script runs before WordPress loads and must copy exact local files.
 // phpcs:disable WordPress.Security.EscapeOutput.ExceptionNotEscaped -- CLI exceptions preserve the exact local path that failed.
 
-$toolkit_root = dirname( __DIR__ );
-$project_root = dirname( $toolkit_root );
-$e2e_action   = $argv[1] ?? '';
-$run_dir      = isset( $argv[2] ) ? rtrim( (string) $argv[2], '/' ) : '';
+$anyape_wp_test_tools_root = dirname( __DIR__ );
+$project_root              = dirname( $anyape_wp_test_tools_root );
+$e2e_action                = $argv[1] ?? '';
+$run_dir                   = isset( $argv[2] ) ? rtrim( (string) $argv[2], '/' ) : '';
 
 if ( ! in_array( $e2e_action, array( 'capture', 'restore', 'cleanup' ), true ) || '' === $run_dir ) {
 	fwrite( STDERR, "Usage: php bin/e2e-filesystem.php <capture|restore|cleanup> <run-directory>\n" );
 	exit( 2 );
 }
 
-$allowed_run_root = $toolkit_root . '/runtime/e2e-runs/';
+$allowed_run_root = $anyape_wp_test_tools_root . '/runtime/e2e-runs/';
 $normalized_run   = str_replace( '\\', '/', $run_dir ) . '/';
 if ( ! str_starts_with( $normalized_run, str_replace( '\\', '/', $allowed_run_root ) ) ) {
-	fwrite( STDERR, "ERROR: The browser-test run directory must be inside .test-tools/runtime/e2e-runs.\n" );
+	fwrite( STDERR, "ERROR: The browser-test run directory must be inside .anyape-wp-test-tools/runtime/e2e-runs.\n" );
 	exit( 1 );
 }
 
@@ -33,7 +33,7 @@ if ( ! str_starts_with( $normalized_run, str_replace( '\\', '/', $allowed_run_ro
  * @param string $entry_path Path to remove.
  * @throws RuntimeException When the path cannot be removed.
  */
-function wp_test_e2e_remove( string $entry_path ): void {
+function anyape_wp_test_tools_e2e_remove( string $entry_path ): void {
 	if ( is_link( $entry_path ) || is_file( $entry_path ) ) {
 		if ( ! unlink( $entry_path ) ) {
 			throw new RuntimeException( 'Could not remove file: ' . $entry_path );
@@ -49,7 +49,7 @@ function wp_test_e2e_remove( string $entry_path ): void {
 	}
 	foreach ( $items as $item ) {
 		if ( '.' !== $item && '..' !== $item ) {
-			wp_test_e2e_remove( $entry_path . '/' . $item );
+			anyape_wp_test_tools_e2e_remove( $entry_path . '/' . $item );
 		}
 	}
 	if ( ! rmdir( $entry_path ) ) {
@@ -66,14 +66,14 @@ function wp_test_e2e_remove( string $entry_path ): void {
  * @param string $directory_path Directory whose contents should be removed.
  * @throws RuntimeException When the directory cannot be read or cleared.
  */
-function wp_test_e2e_clear_directory( string $directory_path ): void {
+function anyape_wp_test_tools_e2e_clear_directory( string $directory_path ): void {
 	$items = scandir( $directory_path );
 	if ( false === $items ) {
 		throw new RuntimeException( 'Could not read directory: ' . $directory_path );
 	}
 	foreach ( $items as $item ) {
 		if ( '.' !== $item && '..' !== $item ) {
-			wp_test_e2e_remove( $directory_path . '/' . $item );
+			anyape_wp_test_tools_e2e_remove( $directory_path . '/' . $item );
 		}
 	}
 }
@@ -85,7 +85,7 @@ function wp_test_e2e_clear_directory( string $directory_path ): void {
  * @param string $destination Destination path.
  * @throws RuntimeException When the path cannot be copied.
  */
-function wp_test_e2e_copy( string $source, string $destination ): void {
+function anyape_wp_test_tools_e2e_copy( string $source, string $destination ): void {
 	if ( is_link( $source ) ) {
 		$target = readlink( $source );
 		if ( false === $target || ! symlink( $target, $destination ) ) {
@@ -116,7 +116,7 @@ function wp_test_e2e_copy( string $source, string $destination ): void {
 	}
 	foreach ( $items as $item ) {
 		if ( '.' !== $item && '..' !== $item ) {
-			wp_test_e2e_copy( $source . '/' . $item, $destination . '/' . $item );
+			anyape_wp_test_tools_e2e_copy( $source . '/' . $item, $destination . '/' . $item );
 		}
 	}
 }
@@ -128,22 +128,22 @@ function wp_test_e2e_copy( string $source, string $destination ): void {
  * @param string $target_path Working-site path.
  * @throws RuntimeException When the path cannot be restored.
  */
-function wp_test_e2e_restore( string $backup_path, string $target_path ): void {
+function anyape_wp_test_tools_e2e_restore( string $backup_path, string $target_path ): void {
 	if ( ! is_dir( $backup_path ) || is_link( $backup_path ) ) {
-		wp_test_e2e_remove( $target_path );
-		wp_test_e2e_copy( $backup_path, $target_path );
+		anyape_wp_test_tools_e2e_remove( $target_path );
+		anyape_wp_test_tools_e2e_copy( $backup_path, $target_path );
 		return;
 	}
 
 	if ( is_link( $target_path ) || is_file( $target_path ) ) {
-		wp_test_e2e_remove( $target_path );
+		anyape_wp_test_tools_e2e_remove( $target_path );
 	}
 	if ( ! is_dir( $target_path ) ) {
 		if ( ! mkdir( $target_path, fileperms( $backup_path ) & 0777, true ) && ! is_dir( $target_path ) ) {
 			throw new RuntimeException( 'Could not create directory: ' . $target_path );
 		}
 	} else {
-		wp_test_e2e_clear_directory( $target_path );
+		anyape_wp_test_tools_e2e_clear_directory( $target_path );
 		chmod( $target_path, fileperms( $backup_path ) & 0777 );
 	}
 
@@ -153,7 +153,7 @@ function wp_test_e2e_restore( string $backup_path, string $target_path ): void {
 	}
 	foreach ( $items as $item ) {
 		if ( '.' !== $item && '..' !== $item ) {
-			wp_test_e2e_copy( $backup_path . '/' . $item, $target_path . '/' . $item );
+			anyape_wp_test_tools_e2e_copy( $backup_path . '/' . $item, $target_path . '/' . $item );
 		}
 	}
 }
@@ -164,7 +164,7 @@ function wp_test_e2e_restore( string $backup_path, string $target_path ): void {
  * @param string $entry_path Path to read.
  * @return string
  */
-function wp_test_e2e_digest( string $entry_path ): string {
+function anyape_wp_test_tools_e2e_digest( string $entry_path ): string {
 	$entries = array();
 	$walk    = static function ( string $current, string $relative ) use ( &$walk, &$entries ): void {
 		if ( is_link( $current ) ) {
@@ -196,7 +196,7 @@ function wp_test_e2e_digest( string $entry_path ): string {
 
 try {
 	if ( 'cleanup' === $e2e_action ) {
-		wp_test_e2e_remove( rtrim( $run_dir, '/' ) );
+		anyape_wp_test_tools_e2e_remove( rtrim( $run_dir, '/' ) );
 		exit( 0 );
 	}
 
@@ -211,10 +211,10 @@ try {
 			throw new RuntimeException( 'Could not create browser-test backup directory.' );
 		}
 
-		$configuration_file = $project_root . '/.wp-test.php';
+		$configuration_file = $project_root . '/.anyape-wp-test-tools.php';
 		$configuration      = is_file( $configuration_file ) ? require $configuration_file : array();
 		if ( ! is_array( $configuration ) ) {
-			throw new RuntimeException( 'The .wp-test.php file must return an array.' );
+			throw new RuntimeException( 'The .anyape-wp-test-tools.php file must return an array.' );
 		}
 		$configured = $configuration['e2e_filesystem_paths'] ?? array();
 		if ( ! is_array( $configured ) ) {
@@ -239,12 +239,12 @@ try {
 			$exists = is_link( $source ) || file_exists( $source );
 			$backup = $backup_dir . '/' . $index;
 			if ( $exists ) {
-				wp_test_e2e_copy( $source, $backup );
+				anyape_wp_test_tools_e2e_copy( $source, $backup );
 			}
 			$state[] = array(
 				'path'   => $relative,
 				'exists' => $exists,
-				'digest' => wp_test_e2e_digest( $source ),
+				'digest' => anyape_wp_test_tools_e2e_digest( $source ),
 				'backup' => (string) $index,
 			);
 		}
@@ -263,11 +263,11 @@ try {
 		$target   = $project_root . '/' . $relative;
 		$backup   = $backup_dir . '/' . (string) ( $entry['backup'] ?? '' );
 		if ( ! empty( $entry['exists'] ) ) {
-			wp_test_e2e_restore( $backup, $target );
+			anyape_wp_test_tools_e2e_restore( $backup, $target );
 		} else {
-			wp_test_e2e_remove( $target );
+			anyape_wp_test_tools_e2e_remove( $target );
 		}
-		$actual = wp_test_e2e_digest( $target );
+		$actual = anyape_wp_test_tools_e2e_digest( $target );
 		if ( ! hash_equals( (string) ( $entry['digest'] ?? '' ), $actual ) ) {
 			throw new RuntimeException( 'Filesystem restoration did not match the saved state: ' . $relative );
 		}

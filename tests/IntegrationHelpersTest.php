@@ -2,12 +2,12 @@
 /**
  * Integration helper tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-use WpTest\IntegrationTestCase;
+use AnyapeWPTestTools\IntegrationTestCase;
 
 /**
  * Tests the integration helper surface.
@@ -16,7 +16,7 @@ use WpTest\IntegrationTestCase;
  */
 final class IntegrationHelpersTest extends IntegrationTestCase {
 
-	private const PLUGIN = 'wp-test-lifecycle/wp-test-lifecycle.php';
+	private const PLUGIN = 'anyape-wp-test-tools-lifecycle/anyape-wp-test-tools-lifecycle.php';
 
 	/** Restores fixture state after each test. */
 	protected function tearDown(): void {
@@ -31,7 +31,7 @@ final class IntegrationHelpersTest extends IntegrationTestCase {
 	private function restore_fixture_selection(): void {
 		require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
-		$manifest = \WpTest\Manifest::from_file(
+		$manifest = \AnyapeWPTestTools\Manifest::from_file(
 			dirname( __DIR__ ) . '/runtime/manifest.json'
 		);
 		$selected = in_array(
@@ -50,7 +50,7 @@ final class IntegrationHelpersTest extends IntegrationTestCase {
 
 		if (
 			is_plugin_active( self::PLUGIN ) ||
-			get_option( 'wp_test_fixture_activation_count', false ) !== false
+			get_option( 'anyape_wp_test_tools_fixture_activation_count', false ) !== false
 		) {
 			$this->uninstall_plugin( self::PLUGIN );
 		}
@@ -64,7 +64,7 @@ final class IntegrationHelpersTest extends IntegrationTestCase {
 			$this->activate_plugin( self::PLUGIN );
 		}
 
-		$route  = '/wp-test/v1/protected';
+		$route  = '/anyape-wp-test-tools/v1/protected';
 		$server = rest_get_server();
 
 		if ( ! isset( $server->get_routes()[ $route ] ) ) {
@@ -85,7 +85,7 @@ final class IntegrationHelpersTest extends IntegrationTestCase {
 		$this->assertSame( array( 'ok' => true ), $allowed->get_data() );
 
 		$file = $this->create_upload_file(
-			'wp-test-helper.txt',
+			'anyape-wp-test-tools-helper.txt',
 			'fixture'
 		);
 		$this->assertFileExists( $file );
@@ -103,11 +103,11 @@ final class IntegrationHelpersTest extends IntegrationTestCase {
 
 	/** Verifies explicit cleanup of tracked options. */
 	public function test_tracked_options_can_be_cleaned_explicitly(): void {
-		$this->set_tracked_option( 'wp_test_tracked_option', 'value' );
-		$this->assertSame( 'value', get_option( 'wp_test_tracked_option' ) );
+		$this->set_tracked_option( 'anyape_wp_test_tools_tracked_option', 'value' );
+		$this->assertSame( 'value', get_option( 'anyape_wp_test_tools_tracked_option' ) );
 
 		$this->cleanup_tracked_state();
 
-		$this->assertFalse( get_option( 'wp_test_tracked_option', false ) );
+		$this->assertFalse( get_option( 'anyape_wp_test_tools_tracked_option', false ) );
 	}
 }

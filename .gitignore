@@ -1,5 +1,5 @@
 .DS_Store
-/db-refresh.local.php
+/db-refresh-local.php
 .phpunit.result.cache
 .wordpress-test-version
 active-plugins.json

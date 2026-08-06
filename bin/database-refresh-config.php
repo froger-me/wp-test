@@ -2,7 +2,7 @@
 /**
  * Validate the ignored local database-refresh configuration for a host script.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
@@ -16,7 +16,7 @@ if ( 2 !== $argc ) {
 
 $configuration_file = $argv[1];
 if ( ! is_file( $configuration_file ) ) {
-	fwrite( STDERR, "ERROR: Missing ignored local configuration: {$configuration_file}\nCopy db-refresh-config-example.php to db-refresh.local.php and fill in its four values.\n" );
+	fwrite( STDERR, "ERROR: Missing ignored local configuration: {$configuration_file}\nCopy db-refresh-config-example.php to db-refresh-local.php and fill in its four values.\n" );
 	exit( 1 );
 }
 

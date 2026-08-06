@@ -3,11 +3,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TOOLS_DIR="$ROOT_DIR/.test-tools"
-CORE_DIR="$TOOLS_DIR/wordpress"
-TESTS_DIR="$TOOLS_DIR/wordpress-tests-lib"
-STATE_FILE="$TOOLS_DIR/.wordpress-test-version"
-CONFIG_FILE="$TOOLS_DIR/config.php"
+ANYAPE_WP_TEST_TOOLS_DIR="$ROOT_DIR/.anyape-wp-test-tools"
+CORE_DIR="$ANYAPE_WP_TEST_TOOLS_DIR/wordpress"
+TESTS_DIR="$ANYAPE_WP_TEST_TOOLS_DIR/wordpress-tests-lib"
+STATE_FILE="$ANYAPE_WP_TEST_TOOLS_DIR/.wordpress-test-version"
+CONFIG_FILE="$ANYAPE_WP_TEST_TOOLS_DIR/config.php"
 
 WP_VERSION="$(
 	php -r '
@@ -80,7 +80,7 @@ svn export --quiet \
 	"https://develop.svn.wordpress.org/${TESTS_REF}/wp-tests-config-sample.php" \
 	"$TESTS_DIR/wp-tests-config.php"
 
-php "$TOOLS_DIR/bin/configure-wordpress-tests.php" \
+php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/configure-wordpress-tests.php" \
 	"$TESTS_DIR/wp-tests-config.php" \
 	"$CORE_DIR" \
 	"$TEST_DATABASE" \

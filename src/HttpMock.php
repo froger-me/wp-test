@@ -2,12 +2,12 @@
 /**
  * Deterministic WordPress HTTP API responses for integration tests.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
-namespace WpTest;
+namespace AnyapeWPTestTools;
 
 use WP_Error;
 

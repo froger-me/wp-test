@@ -2,7 +2,7 @@
 /**
  * Configure the generated WordPress test library.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
@@ -60,14 +60,19 @@ foreach ( $replacements as $pattern => $replacement ) {
 	$config = $updated;
 }
 
-$config = str_replace(
-	array(
-		'dirname( __FILE__ ) . "/src/"',
-		"dirname( __FILE__ ) . '/src/'",
-	),
-	var_export( $core_dir, true ),
-	$config
+$updated = preg_replace(
+	"/define\(\s*['\"]ABSPATH['\"]\s*,\s*.+?\);/",
+	"define( 'ABSPATH', " . var_export( $core_dir, true ) . ' );',
+	$config,
+	1,
+	$count
 );
+if ( null === $updated || 1 !== $count ) {
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- WordPress is not loaded by this CLI configurator.
+	fwrite( STDERR, "ERROR: Could not update ABSPATH in the generated WordPress test configuration.\n" );
+	exit( 1 );
+}
+$config = $updated;
 // phpcs:enable WordPress.PHP.DevelopmentFunctions.error_log_var_export
 
 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- WordPress is not loaded by this CLI configurator.

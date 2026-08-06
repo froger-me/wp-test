@@ -1,17 +1,17 @@
 <?php
 /**
- * Central toolkit safety and compatibility configuration.
+ * Central Anyape WP Test Tools safety and compatibility configuration.
  *
- * @package WpTest
+ * @package AnyapeWPTestTools
  */
 
 declare(strict_types=1);
 
 return array(
 	'working_database'       => 'db',
-	'test_database'          => 'wp_tests',
+	'test_database'          => 'anyape_wp_test_tools',
 	'database_host'          => 'db',
-	'table_prefix'           => 'wptests_',
+	'table_prefix'           => 'anyape_wptt_',
 	'minimum_php_version'    => 80000,
 	'required_extensions'    => array(
 		'dom',
