@@ -76,24 +76,59 @@ FILES_CAPTURED=0
 SNAPSHOT_CREATED=0
 RESTORE_FAILED=0
 
+verify_restored_database() {
+	if ! ddev export-db --database=db --gzip=false --file="$RUN_DIR/database-after.sql"; then
+		echo "ERROR: Could not export the restored working database for verification." >&2
+		return 1
+	fi
+
+	local after_digest
+	if ! after_digest="$(php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/e2e-database-digest.php" "$RUN_DIR/database-after.sql")"; then
+		echo "ERROR: Could not calculate the restored working database comparison value." >&2
+		return 1
+	fi
+	if [[ "$after_digest" != "$DATABASE_BEFORE_DIGEST" ]]; then
+		echo "ERROR: The restored working database does not match its saved state." >&2
+		return 1
+	fi
+}
+
+restore_database() {
+	echo "Restoring the working database from the saved SQL export..."
+	if ddev import-db --database=db --file="$RUN_DIR/database-before.sql" && verify_restored_database; then
+		return 0
+	fi
+
+	echo "The SQL restore failed or did not match; restoring the temporary DDEV snapshot instead..." >&2
+	if ! ddev snapshot restore "$SNAPSHOT_NAME"; then
+		echo "ERROR: Database restoration failed. Snapshot '$SNAPSHOT_NAME' and filesystem backup '$RUN_DIR' were retained." >&2
+		return 1
+	fi
+	if ! verify_restored_database; then
+		echo "ERROR: The snapshot restore could not be verified. Snapshot '$SNAPSHOT_NAME' and filesystem backup '$RUN_DIR' were retained." >&2
+		return 1
+	fi
+}
+
+remove_temporary_snapshot() {
+	if ! ddev snapshot --cleanup --name "$SNAPSHOT_NAME" --yes; then
+		echo "ERROR: The working database was restored, but temporary snapshot '$SNAPSHOT_NAME' could not be removed." >&2
+		echo "Remove it manually with: ddev snapshot --cleanup --name '$SNAPSHOT_NAME' --yes" >&2
+		return 1
+	fi
+	SNAPSHOT_CREATED=0
+}
+
 restore_working_site() {
 	local original_status="$1"
 	trap - EXIT INT TERM HUP
 	set +e
 
 	if ((SNAPSHOT_CREATED)); then
-		echo "Restoring the working database from the temporary snapshot..."
-		if ! ddev snapshot restore "$SNAPSHOT_NAME"; then
-			echo "ERROR: Database restoration failed. Snapshot '$SNAPSHOT_NAME' and filesystem backup '$RUN_DIR' were retained." >&2
+		if ! restore_database; then
 			RESTORE_FAILED=1
-		else
-			ddev export-db --database=db --gzip=false --file="$RUN_DIR/database-after.sql"
-			local after_digest
-			after_digest="$(php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/e2e-database-digest.php" "$RUN_DIR/database-after.sql")"
-			if [[ "$after_digest" != "$DATABASE_BEFORE_DIGEST" ]]; then
-				echo "ERROR: The restored database does not match its saved state. Snapshot '$SNAPSHOT_NAME' was retained." >&2
-				RESTORE_FAILED=1
-			fi
+		elif ! remove_temporary_snapshot; then
+			RESTORE_FAILED=1
 		fi
 	fi
 
@@ -109,7 +144,7 @@ restore_working_site() {
 	fi
 	php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/e2e-filesystem.php" cleanup "$RUN_DIR"
 	if ((original_status == 0)); then
-		echo "Browser tests passed; the working database and files were restored and verified."
+		echo "Browser tests passed; the working database and files were restored and verified, and the temporary snapshot was removed."
 	fi
 	exit "$original_status"
 }
@@ -143,7 +178,7 @@ fi
 php "$ANYAPE_WP_TEST_TOOLS_DIR/bin/build-manifest.php" "${BUILD_ARGS[@]}"
 cp "$ANYAPE_WP_TEST_TOOLS_DIR/runtime/manifest.json" "$RUN_DIR/manifest.json"
 
-echo "Creating temporary DDEV database snapshot '$SNAPSHOT_NAME'..."
+echo "Creating temporary DDEV database snapshot '$SNAPSHOT_NAME' as a restoration fallback..."
 ddev snapshot --name "$SNAPSHOT_NAME"
 SNAPSHOT_CREATED=1
 
